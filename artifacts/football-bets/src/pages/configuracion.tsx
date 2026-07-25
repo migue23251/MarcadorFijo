@@ -272,7 +272,7 @@ function GeminiKeyForm({ hasKey }: { hasKey?: boolean }) {
         </div>
       )}
 
-      <form onSubmit={handleSave} className="flex gap-3">
+      <form onSubmit={handleSave} className="flex flex-col sm:flex-row gap-3">
         <input 
           type="password"
           value={apiKey}
@@ -283,7 +283,7 @@ function GeminiKeyForm({ hasKey }: { hasKey?: boolean }) {
         <button 
           type="submit" 
           disabled={!apiKey.trim() || saveKey.isPending}
-          className="px-6 py-2 bg-secondary text-secondary-foreground font-semibold rounded-md hover:bg-secondary/80 transition-colors disabled:opacity-50 flex items-center gap-2"
+          className="sm:shrink-0 px-6 py-2 bg-secondary text-secondary-foreground font-semibold rounded-md hover:bg-secondary/80 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
         >
           {saveKey.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
           Guardar

@@ -391,7 +391,7 @@ function PredictionRow({ prediction, match, leagueName }: { prediction: Predicti
         </Dialog.Trigger>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 animate-in fade-in" />
-          <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-card border border-border rounded-xl shadow-2xl z-50 p-6 animate-in fade-in zoom-in-95 duration-200">
+          <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-2rem)] max-w-md bg-card border border-border rounded-xl shadow-2xl z-50 p-4 sm:p-6 animate-in fade-in zoom-in-95 duration-200 max-h-[90dvh] overflow-y-auto">
             <BetModalContent 
               prediction={prediction} 
               match={match} 

@@ -41,8 +41,8 @@ export function Sidebar() {
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex flex-col w-64 border-r border-border bg-sidebar h-[100dvh] fixed left-0 top-0">
         <div className="p-6 flex items-center gap-3">
-          <img src={`${basePath}/logo.svg`} alt="RadarBet" className="w-8 h-8" />
-          <span className="text-xl font-bold tracking-tight text-primary">RadarBet</span>
+          <img src={`${basePath}/logo.svg`} alt="MarcadorFijo" className="w-8 h-8" />
+          <span className="text-xl font-bold tracking-tight text-primary">MarcadorFijo</span>
         </div>
         
         <nav className="flex-1 px-4 flex flex-col gap-2 mt-4">

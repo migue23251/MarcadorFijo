@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import {
   useListBets,
   getListBetsQueryKey,
@@ -18,7 +19,6 @@ import {
   Percent,
   Hash,
   Target,
-  ChevronDown,
   History,
   ScanSearch,
   AlertCircle,
@@ -46,7 +46,7 @@ export default function Historial() {
       </header>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard
           title="Total Apuestas"
           value={stats?.totalBets.toString() || "0"}
@@ -80,8 +80,8 @@ export default function Historial() {
           <FilterButton active={statusFilter === "lost"} onClick={() => setStatusFilter("lost")}>Perdidas</FilterButton>
         </div>
 
-        {/* Table/List */}
-        <div className="flex-1 p-0 overflow-x-auto">
+        {/* Content */}
+        <div className="flex-1 overflow-hidden">
           {isLoading ? (
             <div className="p-8 text-center text-muted-foreground flex flex-col items-center justify-center h-full gap-2">
               <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
@@ -99,24 +99,36 @@ export default function Historial() {
               </Link>
             </div>
           ) : (
-            <table className="w-full text-sm text-left whitespace-nowrap">
-              <thead className="text-xs text-muted-foreground uppercase bg-secondary/50 border-b border-border">
-                <tr>
-                  <th className="px-4 py-3 font-semibold">Fecha/Partido</th>
-                  <th className="px-4 py-3 font-semibold">Mercado/Selección</th>
-                  <th className="px-4 py-3 font-semibold text-right">Cuota</th>
-                  <th className="px-4 py-3 font-semibold text-right">Monto</th>
-                  <th className="px-4 py-3 font-semibold text-center">Estado</th>
-                  <th className="px-4 py-3 font-semibold text-right">Retorno</th>
-                  <th className="px-4 py-3 font-semibold text-center">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
+            <>
+              {/* Desktop table */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm text-left whitespace-nowrap">
+                  <thead className="text-xs text-muted-foreground uppercase bg-secondary/50 border-b border-border">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold">Fecha/Partido</th>
+                      <th className="px-4 py-3 font-semibold">Mercado/Selección</th>
+                      <th className="px-4 py-3 font-semibold text-right">Cuota</th>
+                      <th className="px-4 py-3 font-semibold text-right">Monto</th>
+                      <th className="px-4 py-3 font-semibold text-center">Estado</th>
+                      <th className="px-4 py-3 font-semibold text-right">Retorno</th>
+                      <th className="px-4 py-3 font-semibold text-center">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {bets.map((bet) => (
+                      <BetRow key={bet.id} bet={bet} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile cards */}
+              <div className="md:hidden divide-y divide-border">
                 {bets.map((bet) => (
-                  <BetRow key={bet.id} bet={bet} />
+                  <BetCard key={bet.id} bet={bet} />
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -140,7 +152,7 @@ function StatCard({
   trend?: "up" | "down";
 }) {
   return (
-    <div className="bg-card border border-border p-5 rounded-lg flex flex-col gap-2">
+    <div className="bg-card border border-border p-4 sm:p-5 rounded-lg flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{title}</span>
         {icon}
@@ -180,6 +192,10 @@ function FilterButton({
     </button>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Desktop BetRow (table row)
+// ---------------------------------------------------------------------------
 
 function BetRow({ bet }: { bet: Bet }) {
   const queryClient = useQueryClient();
@@ -270,7 +286,6 @@ function BetRow({ bet }: { bet: Bet }) {
         </td>
         <td className="px-4 py-3 text-center">
           <div className="flex items-center justify-center gap-2">
-            {/* Ver análisis cacheado */}
             <button
               onClick={() => setShowAnalysis(true)}
               className="p-1.5 bg-primary/10 text-primary hover:bg-primary/20 rounded border border-primary/30 transition-colors"
@@ -278,8 +293,6 @@ function BetRow({ bet }: { bet: Bet }) {
             >
               <ScanSearch className="w-4 h-4" />
             </button>
-
-            {/* Marcar ganada/perdida — solo si pendiente */}
             {bet.status === "pending" ? (
               <>
                 <button
@@ -305,8 +318,6 @@ function BetRow({ bet }: { bet: Bet }) {
           </div>
         </td>
       </tr>
-
-      {/* Analysis modal */}
       {showAnalysis && (
         <AnalysisModal
           homeTeam={bet.homeTeam}
@@ -322,7 +333,131 @@ function BetRow({ bet }: { bet: Bet }) {
 }
 
 // ---------------------------------------------------------------------------
-// Analysis Modal
+// Mobile BetCard
+// ---------------------------------------------------------------------------
+
+function BetCard({ bet }: { bet: Bet }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const updateBet = useUpdateBet();
+  const [showAnalysis, setShowAnalysis] = useState(false);
+
+  const handleStatusUpdate = (status: "won" | "lost") => {
+    const returnAmount = status === "won" ? bet.stake * bet.odds : 0;
+    updateBet.mutate(
+      { betId: bet.id, data: { status, returnAmount } },
+      {
+        onSuccess: () => {
+          toast({ title: "Apuesta actualizada" });
+          queryClient.invalidateQueries({ queryKey: ["/api/bets"] });
+          queryClient.invalidateQueries({ queryKey: getGetBetStatsQueryKey() });
+        },
+      },
+    );
+  };
+
+  const statusConfig = {
+    pending: { label: "Pendiente", classes: "bg-secondary text-muted-foreground border-border", icon: <Clock className="w-3 h-3 inline mr-1" /> },
+    won:     { label: "Ganada",    classes: "bg-emerald-500/20 text-emerald-500 border-emerald-500/30", icon: <Check className="w-3 h-3 inline mr-1" /> },
+    lost:    { label: "Perdida",   classes: "bg-red-500/20 text-red-500 border-red-500/30", icon: <X className="w-3 h-3 inline mr-1" /> },
+  };
+
+  const rowBg = { pending: "", won: "bg-emerald-500/5", lost: "bg-red-500/5" };
+
+  const formattedDate = new Date(bet.kickoffTime).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  return (
+    <>
+      <div className={`p-4 space-y-3 ${rowBg[bet.status]}`}>
+        {/* Match + status */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="font-semibold text-foreground text-sm truncate">
+              {bet.homeTeam} vs {bet.awayTeam}
+            </p>
+            <p className="text-xs text-muted-foreground">{bet.league} · {formattedDate}</p>
+          </div>
+          <span className={`px-2 py-0.5 text-xs font-semibold rounded-full border flex items-center shrink-0 ${statusConfig[bet.status].classes}`}>
+            {statusConfig[bet.status].icon}
+            {statusConfig[bet.status].label}
+          </span>
+        </div>
+
+        {/* Market + odds + stake */}
+        <div className="flex items-end justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground truncate">{bet.market}</p>
+            <p className="font-semibold text-sm text-foreground">{bet.selection}</p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="font-bold text-primary bg-primary/10 px-2 py-0.5 rounded text-sm">@{bet.odds.toFixed(2)}</span>
+            <span className="text-sm font-medium text-foreground">€{bet.stake.toFixed(2)}</span>
+          </div>
+        </div>
+
+        {/* Return + actions */}
+        <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/50">
+          <div className="text-sm font-bold">
+            {bet.status === "won" ? (
+              <span className="text-emerald-500">+€{bet.returnAmount?.toFixed(2)}</span>
+            ) : bet.status === "lost" ? (
+              <span className="text-red-500">-€{bet.stake.toFixed(2)}</span>
+            ) : (
+              <span className="text-muted-foreground text-xs">Pendiente de resultado</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowAnalysis(true)}
+              className="p-1.5 bg-primary/10 text-primary hover:bg-primary/20 rounded border border-primary/30 transition-colors"
+              title="Ver análisis"
+            >
+              <ScanSearch className="w-4 h-4" />
+            </button>
+            {bet.status === "pending" && (
+              <>
+                <button
+                  onClick={() => handleStatusUpdate("won")}
+                  disabled={updateBet.isPending}
+                  className="p-1.5 bg-emerald-500/20 text-emerald-500 hover:bg-emerald-500/30 rounded border border-emerald-500/30 transition-colors"
+                  title="Marcar como Ganada"
+                >
+                  <Check className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => handleStatusUpdate("lost")}
+                  disabled={updateBet.isPending}
+                  className="p-1.5 bg-red-500/20 text-red-500 hover:bg-red-500/30 rounded border border-red-500/30 transition-colors"
+                  title="Marcar como Perdida"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+      {showAnalysis && (
+        <AnalysisModal
+          homeTeam={bet.homeTeam}
+          awayTeam={bet.awayTeam}
+          league={bet.league}
+          userSelection={bet.selection}
+          userMarket={bet.market}
+          onClose={() => setShowAnalysis(false)}
+        />
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Analysis Modal — rendered via portal so it works inside and outside tables
 // ---------------------------------------------------------------------------
 
 function AnalysisModal({
@@ -353,71 +488,70 @@ function AnalysisModal({
     low: { label: "Baja", classes: "bg-red-500/20 text-red-400 border-red-500/30" },
   };
 
-  return (
-    <tr>
-      <td colSpan={7} className="p-0">
-        {/* Backdrop */}
-        <div
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
-          onClick={onClose}
-        />
+  return createPortal(
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+      />
 
-        {/* Panel */}
-        <div className="fixed inset-y-0 right-0 z-50 w-full max-w-lg flex flex-col bg-card border-l border-border shadow-2xl overflow-hidden animate-in slide-in-from-right duration-300">
-          {/* Header */}
-          <div className="flex items-start justify-between p-5 border-b border-border bg-secondary/30 shrink-0">
-            <div>
-              <p className="text-xs font-semibold text-primary uppercase tracking-wider mb-1">{league}</p>
-              <h2 className="text-lg font-bold text-foreground leading-tight">
-                {homeTeam} <span className="text-muted-foreground font-normal">vs</span> {awayTeam}
-              </h2>
-              <p className="text-xs text-muted-foreground mt-1">
-                Tu apuesta: <span className="text-foreground font-medium">{userSelection}</span>
-                <span className="mx-1.5 opacity-40">·</span>
-                <span className="opacity-60">{userMarket}</span>
+      {/* Panel */}
+      <div className="fixed inset-y-0 right-0 z-50 w-full max-w-lg flex flex-col bg-card border-l border-border shadow-2xl overflow-hidden animate-in slide-in-from-right duration-300">
+        {/* Header */}
+        <div className="flex items-start justify-between p-5 border-b border-border bg-secondary/30 shrink-0">
+          <div>
+            <p className="text-xs font-semibold text-primary uppercase tracking-wider mb-1">{league}</p>
+            <h2 className="text-lg font-bold text-foreground leading-tight">
+              {homeTeam} <span className="text-muted-foreground font-normal">vs</span> {awayTeam}
+            </h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              Tu apuesta: <span className="text-foreground font-medium">{userSelection}</span>
+              <span className="mx-1.5 opacity-40">·</span>
+              <span className="opacity-60">{userMarket}</span>
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground shrink-0 mt-0.5"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center h-40 gap-3 text-muted-foreground">
+              <Loader2 className="w-7 h-7 animate-spin text-primary" />
+              <p className="text-sm">Buscando análisis en caché…</p>
+            </div>
+          ) : is404 ? (
+            <div className="flex flex-col items-center justify-center h-40 gap-3 text-center px-4">
+              <AlertCircle className="w-10 h-10 text-muted-foreground opacity-50" />
+              <p className="text-sm font-semibold text-foreground">Sin análisis disponible hoy</p>
+              <p className="text-xs text-muted-foreground max-w-xs">
+                Nadie ha analizado este partido hoy todavía. Ve al Radar, busca el partido y pulsa «Analizar» — el análisis quedará disponible para todos.
               </p>
             </div>
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground shrink-0 mt-0.5"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Body */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-5">
-            {isLoading ? (
-              <div className="flex flex-col items-center justify-center h-40 gap-3 text-muted-foreground">
-                <Loader2 className="w-7 h-7 animate-spin text-primary" />
-                <p className="text-sm">Buscando análisis en caché…</p>
-              </div>
-            ) : is404 ? (
-              <div className="flex flex-col items-center justify-center h-40 gap-3 text-center px-4">
-                <AlertCircle className="w-10 h-10 text-muted-foreground opacity-50" />
-                <p className="text-sm font-semibold text-foreground">Sin análisis disponible hoy</p>
-                <p className="text-xs text-muted-foreground max-w-xs">
-                  Nadie ha analizado este partido hoy todavía. Ve al Radar, busca el partido y pulsa «Analizar» — el análisis quedará disponible para todos.
-                </p>
-              </div>
-            ) : isError ? (
-              <div className="flex flex-col items-center justify-center h-40 gap-3 text-center px-4">
-                <ShieldAlert className="w-10 h-10 text-red-500 opacity-70" />
-                <p className="text-sm font-semibold text-foreground">Error al cargar el análisis</p>
-                <p className="text-xs text-muted-foreground">Inténtalo de nuevo más tarde.</p>
-              </div>
-            ) : data ? (
-              <AnalysisContent
-                analysis={data}
-                userSelection={userSelection}
-                userMarket={userMarket}
-                confidenceConfig={confidenceConfig}
-              />
-            ) : null}
-          </div>
+          ) : isError ? (
+            <div className="flex flex-col items-center justify-center h-40 gap-3 text-center px-4">
+              <ShieldAlert className="w-10 h-10 text-red-500 opacity-70" />
+              <p className="text-sm font-semibold text-foreground">Error al cargar el análisis</p>
+              <p className="text-xs text-muted-foreground">Inténtalo de nuevo más tarde.</p>
+            </div>
+          ) : data ? (
+            <AnalysisContent
+              analysis={data}
+              userSelection={userSelection}
+              userMarket={userMarket}
+              confidenceConfig={confidenceConfig}
+            />
+          ) : null}
         </div>
-      </td>
-    </tr>
+      </div>
+    </>,
+    document.body,
   );
 }
 

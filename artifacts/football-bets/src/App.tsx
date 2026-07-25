@@ -108,14 +108,14 @@ function AuthUnavailablePage({ mode }: { mode: "sign-in" | "sign-up" }) {
       <div className="w-full max-w-md rounded-xl border border-border bg-card p-8 text-center shadow-2xl">
         <img
           src={`${basePath}/logo.svg`}
-          alt="RadarBet"
+          alt="MarcadorFijo"
           className="mx-auto mb-5 h-12 w-12"
         />
         <h1 className="text-2xl font-bold">
           {isSignUp ? "Registro temporalmente no disponible" : "Acceso temporalmente no disponible"}
         </h1>
         <p className="mt-3 text-sm leading-6 text-muted-foreground">
-          La autenticación de RadarBet todavía no está configurada en este entorno.
+          La autenticación de MarcadorFijo todavía no está configurada en este entorno.
           {isSignUp
             ? " El registro se habilitará cuando se configure una clave válida de Clerk."
             : " El acceso se habilitará cuando se configure una clave válida de Clerk."}
@@ -211,14 +211,14 @@ function ClerkProviderWithRoutes() {
       localization={{
         signIn: {
           start: {
-            title: "Acceso RadarBet",
+            title: "Acceso MarcadorFijo",
             subtitle: "Inicia sesión en tu terminal",
           },
         },
         signUp: {
           start: {
             title: "Crear terminal",
-            subtitle: "Regístrate en RadarBet",
+            subtitle: "Regístrate en MarcadorFijo",
           },
         },
       }}

@@ -8,8 +8,8 @@ export default function Home() {
     <div className="min-h-[100dvh] bg-background text-foreground flex flex-col selection:bg-primary/30">
       <header className="fixed top-0 left-0 right-0 h-16 flex items-center justify-between px-4 md:px-8 border-b border-border bg-background/80 backdrop-blur-md z-50">
         <div className="flex items-center gap-2">
-          <img src={`${basePath}/logo.svg`} alt="RadarBet" className="w-8 h-8" />
-          <span className="text-xl font-bold tracking-tight text-primary">RadarBet</span>
+          <img src={`${basePath}/logo.svg`} alt="MarcadorFijo" className="w-8 h-8" />
+          <span className="text-xl font-bold tracking-tight text-primary">MarcadorFijo</span>
         </div>
         <div className="flex items-center gap-4">
           <Link href="/sign-in" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
@@ -86,11 +86,11 @@ export default function Home() {
       <footer className="border-t border-border py-8 px-4 bg-card">
         <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2 opacity-50">
-            <img src={`${basePath}/logo.svg`} alt="RadarBet" className="w-5 h-5 grayscale" />
-            <span className="text-sm font-semibold tracking-tight">RadarBet</span>
+            <img src={`${basePath}/logo.svg`} alt="MarcadorFijo" className="w-5 h-5 grayscale" />
+            <span className="text-sm font-semibold tracking-tight">MarcadorFijo</span>
           </div>
           <p className="text-xs text-muted-foreground">
-            © {new Date().getFullYear()} RadarBet. Para uso exclusivo de profesionales.
+            © {new Date().getFullYear()} MarcadorFijo. Para uso exclusivo de profesionales.
           </p>
         </div>
       </footer>
