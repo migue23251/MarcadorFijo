@@ -222,6 +222,42 @@ paths:
         "403":
           description: Subscription required
 
+  /matches/cached-analysis:
+    get:
+      operationId: getCachedAnalysis
+      tags: [matches]
+      summary: Get cached analysis for a match (no Gemini call)
+      description: Returns the cached analysis stored in the DB from any prior request today. 404 if no one has analyzed this match yet today.
+      parameters:
+        - name: homeTeam
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: awayTeam
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: league
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Cached match analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MatchAnalysis"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Subscription required
+        "404":
+          description: No cached analysis found for this match today
+
   /matches/analyze:
     post:
       operationId: analyzeMatch

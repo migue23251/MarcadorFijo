@@ -7,8 +7,51 @@ import {
 } from "../lib/auth";
 import { getUserGeminiKey, getUserGeminiModel } from "./config";
 import { getRadarMatches, analyzeMatch, GeminiApiError } from "../lib/gemini";
+import { db, analysisCacheTable } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
 
 const router: IRouter = Router();
+
+// GET /matches/cached-analysis
+router.get(
+  "/matches/cached-analysis",
+  requireAuth,
+  requireSubscription,
+  async (req, res): Promise<void> => {
+    const { homeTeam, awayTeam, league } = req.query as {
+      homeTeam?: string;
+      awayTeam?: string;
+      league?: string;
+    };
+
+    if (!homeTeam || !awayTeam || !league) {
+      res.status(400).json({ error: "homeTeam, awayTeam y league son requeridos" });
+      return;
+    }
+
+    const date = new Date().toISOString().split("T")[0];
+
+    const cached = await db
+      .select()
+      .from(analysisCacheTable)
+      .where(
+        and(
+          eq(analysisCacheTable.date, date),
+          eq(analysisCacheTable.homeTeam, homeTeam),
+          eq(analysisCacheTable.awayTeam, awayTeam),
+          eq(analysisCacheTable.league, league),
+        ),
+      )
+      .limit(1);
+
+    if (cached.length === 0) {
+      res.status(404).json({ error: "No hay análisis cacheado para este partido hoy. Usa el Radar para analizarlo." });
+      return;
+    }
+
+    res.json(JSON.parse(cached[0].result));
+  },
+);
 
 // POST /matches/radar
 router.post(

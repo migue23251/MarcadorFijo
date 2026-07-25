@@ -174,6 +174,12 @@ export interface BetStats {
   winRate: number;
 }
 
+export type GetCachedAnalysisParams = {
+homeTeam: string;
+awayTeam: string;
+league: string;
+};
+
 export type ListBetsParams = {
 status?: ListBetsStatus;
 };

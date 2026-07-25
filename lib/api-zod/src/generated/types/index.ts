@@ -17,6 +17,7 @@ export * from './geminiKeyInput';
 export * from './geminiKeyStatus';
 export * from './geminiModelConfig';
 export * from './geminiModelInput';
+export * from './getCachedAnalysisParams';
 export * from './healthStatus';
 export * from './leagueMatches';
 export * from './listBetsParams';

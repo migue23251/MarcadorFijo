@@ -29,6 +29,7 @@ import type {
   GeminiKeyStatus,
   GeminiModelConfig,
   GeminiModelInput,
+  GetCachedAnalysisParams,
   HealthStatus,
   LeagueMatches,
   ListBetsParams,
@@ -878,6 +879,91 @@ export const useRadarMatches = <TError = ErrorType<void>,
       > => {
       return useMutation(getRadarMatchesMutationOptions(options));
     }
+
+export const getGetCachedAnalysisUrl = (params: GetCachedAnalysisParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/matches/cached-analysis?${stringifiedParams}` : `/api/matches/cached-analysis`
+}
+
+/**
+ * Returns the cached analysis stored in the DB from any prior request today. 404 if no one has analyzed this match yet today.
+ * @summary Get cached analysis for a match (no Gemini call)
+ */
+export const getCachedAnalysis = async (params: GetCachedAnalysisParams, options?: RequestInit): Promise<MatchAnalysis> => {
+
+  return customFetch<MatchAnalysis>(getGetCachedAnalysisUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCachedAnalysisQueryKey = (params?: GetCachedAnalysisParams,) => {
+    return [
+    `/api/matches/cached-analysis`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetCachedAnalysisQueryOptions = <TData = Awaited<ReturnType<typeof getCachedAnalysis>>, TError = ErrorType<void>>(params: GetCachedAnalysisParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCachedAnalysis>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCachedAnalysisQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCachedAnalysis>>> = ({ signal }) => getCachedAnalysis(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCachedAnalysis>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCachedAnalysisQueryResult = NonNullable<Awaited<ReturnType<typeof getCachedAnalysis>>>
+export type GetCachedAnalysisQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get cached analysis for a match (no Gemini call)
+ */
+
+export function useGetCachedAnalysis<TData = Awaited<ReturnType<typeof getCachedAnalysis>>, TError = ErrorType<void>>(
+ params: GetCachedAnalysisParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCachedAnalysis>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCachedAnalysisQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getAnalyzeMatchUrl = () => {
 

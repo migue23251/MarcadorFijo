@@ -155,6 +155,32 @@ export const RadarMatchesResponse = zod.array(RadarMatchesResponseItem)
 
 
 /**
+ * Returns the cached analysis stored in the DB from any prior request today. 404 if no one has analyzed this match yet today.
+ * @summary Get cached analysis for a match (no Gemini call)
+ */
+export const GetCachedAnalysisQueryParams = zod.object({
+  "homeTeam": zod.coerce.string(),
+  "awayTeam": zod.coerce.string(),
+  "league": zod.coerce.string()
+})
+
+export const GetCachedAnalysisResponse = zod.object({
+  "homeTeam": zod.string(),
+  "awayTeam": zod.string(),
+  "league": zod.string(),
+  "summary": zod.string(),
+  "predictions": zod.array(zod.object({
+  "id": zod.string(),
+  "market": zod.string(),
+  "selection": zod.string(),
+  "odds": zod.number(),
+  "confidence": zod.enum(['low', 'medium', 'high']),
+  "reasoning": zod.string().nullish()
+}))
+})
+
+
+/**
  * @summary Analyze a match and get predictions via Gemini AI
  */
 export const AnalyzeMatchBody = zod.object({
