@@ -14,4 +14,6 @@ export interface Match {
   league: string;
   /** @nullable */
   stadium?: string | null;
+  /** True when this match already has a cached analysis in the DB */
+  hasAnalysis?: boolean;
 }

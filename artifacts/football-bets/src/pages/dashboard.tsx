@@ -6,6 +6,7 @@ import {
   getGetGeminiKeyStatusQueryKey,
   useRadarMatches,
   useAnalyzeMatch,
+  useGetCachedAnalysis,
   useCreateBet,
   getListBetsQueryKey,
   getGetBetStatsQueryKey,
@@ -260,36 +261,54 @@ export default function Dashboard() {
 
 function MatchCard({ match, leagueName }: { match: Match, leagueName: string }) {
   const [expanded, setExpanded] = useState(false);
+  // Whether the user has explicitly requested to load the cached analysis
+  const [loadCached, setLoadCached] = useState(false);
+
+  // For matches NOT yet analysed: use the full Gemini mutation
   const analyzeMutation = useAnalyzeMatch();
   const analyzeRequestLockedRef = useRef(false);
 
-  const handleAnalyze = () => {
-    if (analyzeMutation.isPending || analyzeRequestLockedRef.current) return;
+  // For matches already analysed: lazy-load from DB (only when loadCached=true)
+  const cachedAnalysisQuery = useGetCachedAnalysis(
+    { homeTeam: match.homeTeam, awayTeam: match.awayTeam, league: leagueName },
+    {
+      query: {
+        enabled: !!match.hasAnalysis && loadCached,
+        retry: false,
+        staleTime: Infinity, // It's a cache hit — no need to refetch
+      },
+    }
+  );
 
-    if (analyzeMutation.data) {
-      setExpanded((current) => !current);
+  // Unified analysis data: prefer cached query result, fall back to mutation result
+  const analysis = match.hasAnalysis ? cachedAnalysisQuery.data : analyzeMutation.data;
+  const isAnalyzing = match.hasAnalysis
+    ? cachedAnalysisQuery.isFetching
+    : analyzeMutation.isPending;
+
+  const handleAnalyze = () => {
+    // Toggle collapse if we already have data
+    if (analysis) {
+      setExpanded((curr) => !curr);
       return;
     }
 
-    // Analysis is only requested from this explicit button click.
+    if (match.hasAnalysis) {
+      // Cached analysis exists — just load from DB
+      setLoadCached(true);
+      setExpanded(true);
+      return;
+    }
+
+    // No cache — call Gemini
+    if (analyzeMutation.isPending || analyzeRequestLockedRef.current) return;
     analyzeRequestLockedRef.current = true;
     setExpanded(true);
-    analyzeMutation.mutate({
-      data: {
-        homeTeam: match.homeTeam,
-        awayTeam: match.awayTeam,
-        league: leagueName,
-        kickoffTime: match.kickoffTime
-      },
-    }, {
-      onSettled: () => {
-        analyzeRequestLockedRef.current = false;
-      },
-    });
+    analyzeMutation.mutate(
+      { data: { homeTeam: match.homeTeam, awayTeam: match.awayTeam, league: leagueName, kickoffTime: match.kickoffTime } },
+      { onSettled: () => { analyzeRequestLockedRef.current = false; } },
+    );
   };
-
-  const isAnalyzing = analyzeMutation.isPending;
-  const analysis = analyzeMutation.data;
 
   return (
     <div className="bg-card border border-border rounded-lg overflow-hidden flex flex-col transition-all duration-300 hover:border-primary/50">
@@ -297,9 +316,16 @@ function MatchCard({ match, leagueName }: { match: Match, leagueName: string }) 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs font-medium text-primary px-2 py-0.5 bg-primary/10 rounded-sm">
-              {new Date(match.kickoffTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              {match.kickoffTime
+                ? (() => { const d = new Date(match.kickoffTime); return isNaN(d.getTime()) ? match.kickoffTime : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); })()
+                : "—"}
             </span>
             {match.stadium && <span className="text-xs text-muted-foreground truncate">{match.stadium}</span>}
+            {match.hasAnalysis && (
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-sm bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+                En caché
+              </span>
+            )}
           </div>
           <div className="flex flex-col mt-2">
             <span className="text-lg font-bold text-foreground truncate">{match.homeTeam}</span>
@@ -311,13 +337,15 @@ function MatchCard({ match, leagueName }: { match: Match, leagueName: string }) 
         <div className="ml-4 flex flex-col items-end justify-center">
           <button 
             onClick={handleAnalyze}
-            disabled={isAnalyzing || analyzeRequestLockedRef.current}
+            disabled={isAnalyzing}
             className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-md font-medium text-sm transition-colors border border-border"
           >
             {isAnalyzing ? (
-              <><Loader2 className="w-4 h-4 animate-spin text-primary" /> Analizando</>
+              <><Loader2 className="w-4 h-4 animate-spin text-primary" /> {match.hasAnalysis ? "Cargando..." : "Analizando"}</>
             ) : analysis ? (
               <><ChevronDown className={`w-4 h-4 transition-transform ${expanded ? "rotate-180" : ""}`} /> {expanded ? "Ocultar" : "Ver Análisis"}</>
+            ) : match.hasAnalysis ? (
+              <><ChevronDown className="w-4 h-4 text-emerald-400" /> Ver Análisis</>
             ) : (
               <><Target className="w-4 h-4 text-primary" /> Analizar</>
             )}

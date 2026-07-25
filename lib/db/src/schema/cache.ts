@@ -1,20 +1,20 @@
 import { pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 
 /**
- * Shared radar cache — one entry per date + leagues combination.
- * All users hitting the same leagues on the same day get the same result
- * without an extra Gemini call.
+ * Shared radar cache — one entry per date + league.
+ * Each league is cached independently so Gemini is only called
+ * for leagues that have no cache entry for today.
  */
 export const radarCacheTable = pgTable("radar_cache", {
   id: serial("id").primaryKey(),
   /** YYYY-MM-DD in UTC */
   date: text("date").notNull(),
   /**
-   * Canonical key built from the sorted, lowercased league list joined with "|".
-   * Empty string means "default leagues".
+   * Single league name (lowercase, trimmed).
+   * One row per league per day.
    */
-  leaguesKey: text("leagues_key").notNull(),
-  /** Full JSON result as stored string */
+  league: text("league").notNull(),
+  /** JSON array of matches for this league: GeminiMatch[] */
   result: text("result").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

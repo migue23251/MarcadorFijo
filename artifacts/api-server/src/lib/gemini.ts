@@ -1,6 +1,6 @@
 import { logger } from "./logger";
 import { db, radarCacheTable, analysisCacheTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 
 const GEMINI_API_BASE =
   "https://generativelanguage.googleapis.com/v1beta/models";
@@ -112,38 +112,68 @@ function buildLeaguesKey(leagues?: string[]): string {
 // Radar
 // ---------------------------------------------------------------------------
 
+const DEFAULT_LEAGUES = [
+  "Premier League",
+  "La Liga",
+  "Serie A",
+  "Bundesliga",
+  "Ligue 1",
+  "Champions League",
+  "Europa League",
+  "MLS",
+];
+
+/**
+ * Fetch today's matches for the requested leagues.
+ *
+ * NEW ARCHITECTURE:
+ *  1. Check radar_cache per-league (one row per league per day).
+ *  2. Only call Gemini for leagues with NO cache entry today.
+ *  3. Cache new results per-league before returning.
+ *  4. Enrich every match with hasAnalysis=true/false from analysis_cache.
+ */
 export async function getRadarMatches(
   apiKey: string,
   model: string,
   leagues?: string[],
-): Promise<{ league: string; matches: GeminiMatch[] }[]> {
+): Promise<{ league: string; matches: (GeminiMatch & { hasAnalysis: boolean })[] }[]> {
   const date = todayUTC();
-  const leaguesKey = buildLeaguesKey(leagues);
+  const requestedLeagues = leagues && leagues.length > 0 ? leagues : DEFAULT_LEAGUES;
 
-  // --- Cache lookup (shared across all users) ---
-  const cached = await db
+  // 1. Check radar_cache for each requested league individually
+  const cachedRows = await db
     .select()
     .from(radarCacheTable)
     .where(
       and(
         eq(radarCacheTable.date, date),
-        eq(radarCacheTable.leaguesKey, leaguesKey),
+        inArray(
+          radarCacheTable.league,
+          requestedLeagues.map((l) => l.toLowerCase().trim()),
+        ),
       ),
-    )
-    .limit(1);
+    );
 
-  if (cached.length > 0) {
-    logger.info({ date, leaguesKey }, "Radar cache hit — skipping Gemini call");
-    return JSON.parse(cached[0].result);
+  const cachedByLeague = new Map<string, GeminiMatch[]>();
+  for (const row of cachedRows) {
+    cachedByLeague.set(row.league, JSON.parse(row.result) as GeminiMatch[]);
   }
 
-  // --- Cache miss: call Gemini ---
-  const leagueList =
-    leagues && leagues.length > 0
-      ? leagues.join(", ")
-      : "Premier League, La Liga, Serie A, Bundesliga, Ligue 1, Champions League, Europa League, MLS";
+  logger.info(
+    { date, cached: cachedByLeague.size, total: requestedLeagues.length },
+    "Radar cache check",
+  );
 
-  const prompt = `You are a football data assistant. Return today's (${date}) scheduled football matches from these leagues: ${leagueList}.
+  // 2. Identify leagues that have no cache entry today → call Gemini for those only
+  const uncachedLeagues = requestedLeagues.filter(
+    (l) => !cachedByLeague.has(l.toLowerCase().trim()),
+  );
+
+  if (uncachedLeagues.length > 0) {
+    logger.info({ date, uncachedLeagues }, "Calling Gemini for uncached leagues");
+
+    const leagueList = uncachedLeagues.join(", ");
+    const prompt = `You are a football data assistant. Return today's (${date}) scheduled football matches from these leagues: ${leagueList}.
 
 Return a valid JSON array with this exact structure:
 [
@@ -151,66 +181,108 @@ Return a valid JSON array with this exact structure:
     "league": "League Name",
     "homeTeam": "Home Team Name",
     "awayTeam": "Away Team Name",
-    "kickoffTime": "HH:MM",
+    "kickoffTime": "${date}THH:MM:00Z",
     "stadium": "Stadium Name or null"
   }
 ]
 
 Rules:
-- Only include real scheduled matches for today
-- If no matches today for a league, skip it
-- kickoffTime must be in 24h HH:MM format (UTC)
-- Sort results by league name alphabetically, then by kickoffTime chronologically
+- Only include real scheduled matches for today (${date})
+- If no matches today for a league, simply omit that league from the results
+- kickoffTime must be a full ISO-8601 UTC string: ${date}THH:MM:00Z
+- The "league" field must match exactly one of: ${leagueList}
+- Sort results by kickoffTime chronologically
 - Return ONLY the JSON array, no markdown, no explanations`;
 
-  const raw = await callGemini(apiKey, model, prompt);
+    const raw = await callGemini(apiKey, model, prompt);
 
-  let matches: GeminiMatch[] = [];
-  try {
-    const parsed = JSON.parse(raw);
-    matches = Array.isArray(parsed) ? parsed : [];
-  } catch {
-    logger.warn({ raw }, "Failed to parse Gemini radar response as JSON");
-    matches = [];
+    let fetchedMatches: GeminiMatch[] = [];
+    try {
+      const parsed = JSON.parse(raw);
+      fetchedMatches = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      logger.warn({ raw }, "Failed to parse Gemini radar response as JSON");
+    }
+
+    // Group new matches by league
+    const newGrouped = new Map<string, GeminiMatch[]>();
+    for (const match of fetchedMatches) {
+      if (!match.league || !match.homeTeam || !match.awayTeam) continue;
+      const existing = newGrouped.get(match.league) ?? [];
+      existing.push(match);
+      newGrouped.set(match.league, existing);
+    }
+
+    // Cache each uncached league individually (best-effort)
+    for (const leagueName of uncachedLeagues) {
+      const matchesForLeague = newGrouped.get(leagueName) ?? [];
+      const leagueKey = leagueName.toLowerCase().trim();
+      cachedByLeague.set(leagueKey, matchesForLeague);
+      try {
+        await db.insert(radarCacheTable).values({
+          date,
+          league: leagueKey,
+          result: JSON.stringify(matchesForLeague),
+        });
+        logger.info({ date, league: leagueKey, count: matchesForLeague.length }, "League cached");
+      } catch (err) {
+        logger.warn({ err, league: leagueKey }, "Failed to cache league result");
+      }
+    }
   }
 
-  // Group by league
+  // 3. Build final sorted result
   const grouped = new Map<string, GeminiMatch[]>();
-  for (const match of matches) {
-    if (!match.league || !match.homeTeam || !match.awayTeam) continue;
-    const existing = grouped.get(match.league) ?? [];
-    existing.push(match);
-    grouped.set(match.league, existing);
+  for (const leagueName of requestedLeagues) {
+    const leagueKey = leagueName.toLowerCase().trim();
+    const matches = cachedByLeague.get(leagueKey) ?? [];
+    if (matches.length === 0) continue;
+    grouped.set(leagueName, matches);
   }
 
-  // Sort leagues alphabetically
   const sorted = Array.from(grouped.entries())
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([league, leagueMatches]) => {
-      const sortedMatches = leagueMatches.sort((a, b) =>
-        (a.kickoffTime ?? "").localeCompare(b.kickoffTime ?? ""),
-      );
-      return {
-        league,
-        matches: sortedMatches.map((m, i) => ({
+    .map(([league, leagueMatches]) => ({
+      league,
+      matches: leagueMatches
+        .sort((a, b) => (a.kickoffTime ?? "").localeCompare(b.kickoffTime ?? ""))
+        .map((m, i) => ({
           ...m,
           id: `${league}-${m.homeTeam}-${m.awayTeam}-${i}`
             .replace(/\s+/g, "-")
             .toLowerCase(),
+          hasAnalysis: false, // will be enriched below
         })),
-      };
-    });
+    }));
 
-  // --- Save to cache (best-effort, don't fail the request) ---
-  try {
-    await db.insert(radarCacheTable).values({
-      date,
-      leaguesKey,
-      result: JSON.stringify(sorted),
-    });
-    logger.info({ date, leaguesKey }, "Radar result cached in DB");
-  } catch (err) {
-    logger.warn({ err }, "Failed to save radar result to cache");
+  // 4. Enrich with hasAnalysis — single bulk query on analysis_cache for today
+  const allMatches = sorted.flatMap((lg) => lg.matches);
+  if (allMatches.length > 0) {
+    try {
+      const analysedToday = await db
+        .select({
+          homeTeam: analysisCacheTable.homeTeam,
+          awayTeam: analysisCacheTable.awayTeam,
+          league: analysisCacheTable.league,
+        })
+        .from(analysisCacheTable)
+        .where(eq(analysisCacheTable.date, date));
+
+      const analysedSet = new Set(
+        analysedToday.map(
+          (r) => `${r.homeTeam.toLowerCase()}|${r.awayTeam.toLowerCase()}|${r.league.toLowerCase()}`,
+        ),
+      );
+
+      for (const lg of sorted) {
+        for (const m of lg.matches) {
+          const key = `${m.homeTeam.toLowerCase()}|${m.awayTeam.toLowerCase()}|${lg.league.toLowerCase()}`;
+          m.hasAnalysis = analysedSet.has(key);
+        }
+      }
+    } catch (err) {
+      logger.warn({ err }, "Failed to enrich matches with hasAnalysis flag");
+    }
   }
 
   return sorted;
