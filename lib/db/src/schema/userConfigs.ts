@@ -6,6 +6,7 @@ export const userConfigsTable = pgTable("user_configs", {
   id: serial("id").primaryKey(),
   clerkId: text("clerk_id").notNull().unique(),
   geminiKeyEncrypted: text("gemini_key_encrypted"),
+  geminiModel: text("gemini_model").default("gemini-2.0-flash"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

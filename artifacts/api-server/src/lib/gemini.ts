@@ -1,10 +1,7 @@
 import { logger } from "./logger";
 
-const GEMINI_API_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
-
-// Leave empty — the admin fills in the custom analysis prompt
-const SYSTEM_ANALYSIS_PROMPT = "";
+const GEMINI_API_BASE =
+  "https://generativelanguage.googleapis.com/v1beta/models";
 
 interface GeminiMatch {
   league: string;
@@ -41,8 +38,9 @@ export class GeminiApiError extends Error {
   }
 }
 
-async function callGemini(apiKey: string, prompt: string): Promise<string> {
-  const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
+async function callGemini(apiKey: string, model: string, prompt: string): Promise<string> {
+  const url = `${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`;
+  const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -83,6 +81,7 @@ async function callGemini(apiKey: string, prompt: string): Promise<string> {
 
 export async function getRadarMatches(
   apiKey: string,
+  model: string,
   leagues?: string[],
 ): Promise<{ league: string; matches: GeminiMatch[] }[]> {
   const leagueList =
@@ -112,7 +111,7 @@ Rules:
 - Sort results by league name alphabetically, then by kickoffTime chronologically
 - Return ONLY the JSON array, no markdown, no explanations`;
 
-  const raw = await callGemini(apiKey, prompt);
+  const raw = await callGemini(apiKey, model, prompt);
 
   let matches: GeminiMatch[] = [];
   try {
@@ -154,6 +153,7 @@ Rules:
 
 export async function analyzeMatch(
   apiKey: string,
+  model: string,
   homeTeam: string,
   awayTeam: string,
   league: string,
@@ -224,7 +224,7 @@ Devuelve un objeto JSON válido con esta estructura exacta. El campo "summary" d
 
 Proporciona entre 4 y 6 value bets cubriendo distintos mercados (resultado, goles, tarjetas, córners). Devuelve ÚNICAMENTE el objeto JSON, sin markdown ni texto adicional.`;
 
-  const raw = await callGemini(apiKey, prompt);
+  const raw = await callGemini(apiKey, model, prompt);
 
   let analysis: GeminiAnalysis;
   try {

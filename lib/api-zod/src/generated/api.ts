@@ -88,6 +88,26 @@ export const UpdateUserSubscriptionResponse = zod.object({
 
 
 /**
+ * @summary Get user's selected Gemini model
+ */
+export const GetGeminiModelResponse = zod.object({
+  "model": zod.string()
+})
+
+
+/**
+ * @summary Save user's preferred Gemini model
+ */
+export const SaveGeminiModelBody = zod.object({
+  "model": zod.string()
+})
+
+export const SaveGeminiModelResponse = zod.object({
+  "model": zod.string()
+})
+
+
+/**
  * @summary Check if user has a Gemini API key configured
  */
 export const GetGeminiKeyStatusResponse = zod.object({

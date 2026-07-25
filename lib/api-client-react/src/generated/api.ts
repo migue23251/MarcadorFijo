@@ -27,6 +27,8 @@ import type {
   BetUpdate,
   GeminiKeyInput,
   GeminiKeyStatus,
+  GeminiModelConfig,
+  GeminiModelInput,
   HealthStatus,
   LeagueMatches,
   ListBetsParams,
@@ -437,6 +439,154 @@ export const useUpdateUserSubscription = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getUpdateUserSubscriptionMutationOptions(options));
+    }
+
+export const getGetGeminiModelUrl = () => {
+
+
+
+
+  return `/api/config/gemini-model`
+}
+
+/**
+ * @summary Get user's selected Gemini model
+ */
+export const getGeminiModel = async ( options?: RequestInit): Promise<GeminiModelConfig> => {
+
+  return customFetch<GeminiModelConfig>(getGetGeminiModelUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetGeminiModelQueryKey = () => {
+    return [
+    `/api/config/gemini-model`
+    ] as const;
+    }
+
+
+export const getGetGeminiModelQueryOptions = <TData = Awaited<ReturnType<typeof getGeminiModel>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGeminiModel>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGeminiModelQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGeminiModel>>> = ({ signal }) => getGeminiModel({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGeminiModel>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetGeminiModelQueryResult = NonNullable<Awaited<ReturnType<typeof getGeminiModel>>>
+export type GetGeminiModelQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get user's selected Gemini model
+ */
+
+export function useGetGeminiModel<TData = Awaited<ReturnType<typeof getGeminiModel>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGeminiModel>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetGeminiModelQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSaveGeminiModelUrl = () => {
+
+
+
+
+  return `/api/config/gemini-model`
+}
+
+/**
+ * @summary Save user's preferred Gemini model
+ */
+export const saveGeminiModel = async (geminiModelInput: GeminiModelInput, options?: RequestInit): Promise<GeminiModelConfig> => {
+
+  return customFetch<GeminiModelConfig>(getSaveGeminiModelUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(geminiModelInput)
+  }
+);}
+
+
+
+
+
+export const getSaveGeminiModelMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveGeminiModel>>, TError,{data: BodyType<GeminiModelInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveGeminiModel>>, TError,{data: BodyType<GeminiModelInput>}, TContext> => {
+
+const mutationKey = ['saveGeminiModel'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveGeminiModel>>, {data: BodyType<GeminiModelInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  saveGeminiModel(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveGeminiModelMutationResult = NonNullable<Awaited<ReturnType<typeof saveGeminiModel>>>
+    export type SaveGeminiModelMutationBody = BodyType<GeminiModelInput>
+    export type SaveGeminiModelMutationError = ErrorType<void>
+
+    /**
+ * @summary Save user's preferred Gemini model
+ */
+export const useSaveGeminiModel = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveGeminiModel>>, TError,{data: BodyType<GeminiModelInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof saveGeminiModel>>,
+        TError,
+        {data: BodyType<GeminiModelInput>},
+        TContext
+      > => {
+      return useMutation(getSaveGeminiModelMutationOptions(options));
     }
 
 export const getGetGeminiKeyStatusUrl = () => {

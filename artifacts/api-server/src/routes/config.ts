@@ -5,12 +5,75 @@ import {
   GetGeminiKeyStatusResponse,
   SaveGeminiKeyBody,
   SaveGeminiKeyResponse,
+  GetGeminiModelResponse,
+  SaveGeminiModelBody,
+  SaveGeminiModelResponse,
 } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../lib/auth";
 import { encrypt, decrypt } from "../lib/crypto";
 import { logger } from "../lib/logger";
 
+export const DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
+
 const router: IRouter = Router();
+
+// GET /config/gemini-model
+router.get(
+  "/config/gemini-model",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const user = (req as AuthenticatedRequest).dbUser;
+
+    const [config] = await db
+      .select()
+      .from(userConfigsTable)
+      .where(eq(userConfigsTable.clerkId, user.clerkId))
+      .limit(1);
+
+    res.json(
+      GetGeminiModelResponse.parse({
+        model: config?.geminiModel ?? DEFAULT_GEMINI_MODEL,
+      }),
+    );
+  },
+);
+
+// PUT /config/gemini-model
+router.put(
+  "/config/gemini-model",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const user = (req as AuthenticatedRequest).dbUser;
+
+    const parsed = SaveGeminiModelBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+
+    const [existing] = await db
+      .select()
+      .from(userConfigsTable)
+      .where(eq(userConfigsTable.clerkId, user.clerkId))
+      .limit(1);
+
+    if (existing) {
+      await db
+        .update(userConfigsTable)
+        .set({ geminiModel: parsed.data.model })
+        .where(eq(userConfigsTable.clerkId, user.clerkId));
+    } else {
+      await db.insert(userConfigsTable).values({
+        clerkId: user.clerkId,
+        geminiModel: parsed.data.model,
+      });
+    }
+
+    logger.info({ clerkId: user.clerkId, model: parsed.data.model }, "Gemini model saved");
+
+    res.json(SaveGeminiModelResponse.parse({ model: parsed.data.model }));
+  },
+);
 
 // GET /config/gemini-key
 router.get(
@@ -106,6 +169,17 @@ export async function getUserGeminiKey(clerkId: string): Promise<string | null> 
   } catch {
     return null;
   }
+}
+
+// Internal helper — get selected Gemini model for a user (used by matches routes)
+export async function getUserGeminiModel(clerkId: string): Promise<string> {
+  const [config] = await db
+    .select()
+    .from(userConfigsTable)
+    .where(eq(userConfigsTable.clerkId, clerkId))
+    .limit(1);
+
+  return config?.geminiModel ?? DEFAULT_GEMINI_MODEL;
 }
 
 export default router;

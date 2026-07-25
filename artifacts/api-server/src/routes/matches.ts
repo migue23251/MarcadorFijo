@@ -5,7 +5,7 @@ import {
   requireSubscription,
   type AuthenticatedRequest,
 } from "../lib/auth";
-import { getUserGeminiKey } from "./config";
+import { getUserGeminiKey, getUserGeminiModel } from "./config";
 import { getRadarMatches, analyzeMatch, GeminiApiError } from "../lib/gemini";
 
 const router: IRouter = Router();
@@ -33,8 +33,9 @@ router.post(
     }
 
     try {
+      const model = await getUserGeminiModel(user.clerkId);
       const leagues = parsed.data.leagues;
-      const results = await getRadarMatches(apiKey, leagues);
+      const results = await getRadarMatches(apiKey, model, leagues);
       res.json(results);
     } catch (err) {
       if (err instanceof GeminiApiError) {
@@ -70,8 +71,9 @@ router.post(
     }
 
     try {
+      const model = await getUserGeminiModel(user.clerkId);
       const { homeTeam, awayTeam, league, kickoffTime } = parsed.data;
-      const analysis = await analyzeMatch(apiKey, homeTeam, awayTeam, league, kickoffTime);
+      const analysis = await analyzeMatch(apiKey, model, homeTeam, awayTeam, league, kickoffTime);
       res.json(analysis);
     } catch (err) {
       if (err instanceof GeminiApiError) {

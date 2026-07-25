@@ -118,6 +118,40 @@ paths:
         "404":
           description: User not found
 
+  /config/gemini-model:
+    get:
+      operationId: getGeminiModel
+      tags: [config]
+      summary: Get user's selected Gemini model
+      responses:
+        "200":
+          description: Current model config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeminiModelConfig"
+        "401":
+          description: Unauthorized
+    put:
+      operationId: saveGeminiModel
+      tags: [config]
+      summary: Save user's preferred Gemini model
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GeminiModelInput"
+      responses:
+        "200":
+          description: Model saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeminiModelConfig"
+        "401":
+          description: Unauthorized
+
   /config/gemini-key:
     get:
       operationId: getGeminiKeyStatus
@@ -402,6 +436,22 @@ components:
         - apiKey
       properties:
         apiKey:
+          type: string
+
+    GeminiModelConfig:
+      type: object
+      required:
+        - model
+      properties:
+        model:
+          type: string
+
+    GeminiModelInput:
+      type: object
+      required:
+        - model
+      properties:
+        model:
           type: string
 
     RadarInput:

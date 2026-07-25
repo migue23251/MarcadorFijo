@@ -6,12 +6,48 @@ import {
   useGetGeminiKeyStatus, 
   getGetGeminiKeyStatusQueryKey,
   useSaveGeminiKey,
-  useDeleteGeminiKey
+  useDeleteGeminiKey,
+  useGetGeminiModel,
+  getGetGeminiModelQueryKey,
+  useSaveGeminiModel,
 } from "@workspace/api-client-react";
 import { useUser } from "@clerk/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { Key, User, ShieldCheck, Check, Loader2, Trash2 } from "lucide-react";
+import { Key, User, ShieldCheck, Check, Loader2, Trash2, Cpu } from "lucide-react";
+
+const GEMINI_MODELS = [
+  {
+    id: "gemini-2.0-flash",
+    label: "Gemini 2.0 Flash",
+    description: "Rápido y eficiente. Recomendado para uso diario.",
+    badge: "Recomendado",
+  },
+  {
+    id: "gemini-2.5-flash",
+    label: "Gemini 2.5 Flash",
+    description: "Mayor capacidad de razonamiento con buena velocidad.",
+    badge: "Nuevo",
+  },
+  {
+    id: "gemini-2.5-pro",
+    label: "Gemini 2.5 Pro",
+    description: "Máxima inteligencia para análisis complejos. Más lento.",
+    badge: "Pro",
+  },
+  {
+    id: "gemini-1.5-pro",
+    label: "Gemini 1.5 Pro",
+    description: "Modelo Pro de generación anterior. Alta calidad.",
+    badge: null,
+  },
+  {
+    id: "gemini-1.5-flash",
+    label: "Gemini 1.5 Flash",
+    description: "Flash de generación anterior. Muy económico.",
+    badge: null,
+  },
+];
 
 export default function Configuracion() {
   const { user } = useUser();
@@ -20,6 +56,7 @@ export default function Configuracion() {
 
   const { data: me } = useGetMe({ query: { queryKey: getGetMeQueryKey() } });
   const { data: keyStatus } = useGetGeminiKeyStatus({ query: { queryKey: getGetGeminiKeyStatusQueryKey() } });
+  const { data: modelConfig } = useGetGeminiModel({ query: { queryKey: getGetGeminiModelQueryKey() } });
 
   return (
     <div className="space-y-8 max-w-4xl mx-auto animate-in fade-in duration-500">
@@ -43,6 +80,22 @@ export default function Configuracion() {
           </div>
           <div className="p-6">
             <GeminiKeyForm hasKey={keyStatus?.hasKey} />
+          </div>
+        </section>
+
+        {/* Gemini Model Section */}
+        <section className="bg-card border border-border rounded-xl overflow-hidden">
+          <div className="p-6 border-b border-border bg-secondary/20 flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-md">
+              <Cpu className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold">Modelo de IA</h2>
+              <p className="text-sm text-muted-foreground">Selecciona el modelo de Gemini para el Radar y los análisis.</p>
+            </div>
+          </div>
+          <div className="p-6">
+            <GeminiModelSelector currentModel={modelConfig?.model} queryClient={queryClient} toast={toast} />
           </div>
         </section>
 
@@ -101,6 +154,71 @@ export default function Configuracion() {
         </section>
 
       </div>
+    </div>
+  );
+}
+
+function GeminiModelSelector({ currentModel, queryClient, toast }: {
+  currentModel?: string;
+  queryClient: ReturnType<typeof import("@tanstack/react-query").useQueryClient>;
+  toast: ReturnType<typeof useToast>["toast"];
+}) {
+  const saveModel = useSaveGeminiModel();
+  const [selected, setSelected] = useState(currentModel ?? "gemini-2.0-flash");
+
+  useEffect(() => {
+    if (currentModel) setSelected(currentModel);
+  }, [currentModel]);
+
+  const handleSave = () => {
+    saveModel.mutate({ data: { model: selected } }, {
+      onSuccess: () => {
+        toast({ title: "Modelo actualizado", description: `Ahora usas ${selected}.` });
+        queryClient.invalidateQueries({ queryKey: getGetGeminiModelQueryKey() });
+      },
+      onError: () => toast({ title: "Error", description: "No se pudo guardar el modelo.", variant: "destructive" }),
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {GEMINI_MODELS.map(m => (
+          <button
+            key={m.id}
+            onClick={() => setSelected(m.id)}
+            className={`text-left p-4 rounded-lg border transition-all duration-150 ${
+              selected === m.id
+                ? "border-primary/60 bg-primary/10"
+                : "border-border bg-secondary/30 hover:border-primary/30"
+            }`}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className={`text-sm font-semibold ${selected === m.id ? "text-primary" : "text-foreground"}`}>
+                {m.label}
+              </span>
+              <div className="flex items-center gap-2">
+                {m.badge && (
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/20 text-primary border border-primary/30">
+                    {m.badge}
+                  </span>
+                )}
+                {selected === m.id && <Check className="w-4 h-4 text-primary shrink-0" />}
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">{m.description}</p>
+          </button>
+        ))}
+      </div>
+
+      <button
+        onClick={handleSave}
+        disabled={saveModel.isPending || selected === currentModel}
+        className="px-6 py-2 bg-primary text-primary-foreground font-semibold rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2"
+      >
+        {saveModel.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+        Guardar modelo
+      </button>
     </div>
   );
 }

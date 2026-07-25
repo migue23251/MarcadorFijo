@@ -47,6 +47,14 @@ export interface GeminiKeyInput {
   apiKey: string;
 }
 
+export interface GeminiModelConfig {
+  model: string;
+}
+
+export interface GeminiModelInput {
+  model: string;
+}
+
 export interface RadarInput {
   leagues?: string[];
 }
