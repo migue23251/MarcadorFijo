@@ -1,0 +1,48 @@
+Actúa como un desarrollador Full-Stack Senior y crea una aplicación web completa y responsive para la gestión y predicción de apuestas deportivas de fútbol. 
+
+### 🛠️ Tech Stack Requerido:
+- Frontend: React + Vite + Tailwind CSS (o UI moderna/limpia)
+- Backend: Node.js + Express
+- Base de Datos: PostgreSQL
+- Autenticación: JWT o sesiones de usuario seguras.
+
+---
+
+### 🔑 Funcionalidades y Módulos Requeridos:
+
+#### 1. Módulo de Autenticación y Control de Suscripciones
+- **Login y Registro de usuarios.**
+- **Módulo de Perfil:** Permitir a los usuarios cambiar su contraseña de forma segura.
+- **Control de Suscripción (Lógica clave):** 
+  - Agrega un campo en la BD para el estado de suscripción del usuario (`active_subscription`: boolean/fecha de expiración).
+  - Incluye un rol de **Administrador** que pueda activar/desactivar la suscripción mensual de cualquier usuario.
+  - **Restricción:** Si un usuario NO tiene la suscripción activa, la aplicación debe bloquearle el acceso al botón de "Radar de Partidos" y a las funcionalidades de predicción, mostrando un aviso para contactar al administrador.
+
+#### 2. Módulo de Configuración (API Keys)
+- Un apartado en el menú para que cada usuario configure y guarde de forma segura su propia **API Key de Gemini**.
+- La clave debe encriptarse/almacenarse en la BD asociada a ese usuario para consumirla en las peticiones a la API.
+
+#### 3. Dashboard Principal & Módulo Inicial (Radar y Predicciones)
+- **Botón "Radar de Partidos":**
+  - Al hacer clic, hace una llamada a la API de Gemini utilizando la API Key del usuario para buscar/obtener los partidos del día en las ligas seleccionadas.
+  - **Ordenamiento obligatorio:** Los partidos devueltos se deben mostrar ordenados alfabéticamente por Liga y luego en orden cronológico por hora de juego.
+- **Análisis de Partido:**
+  - Cada tarjeta o fila de partido debe incluir un botón llamado **"Analizar Partido"**.
+  - Al hacer clic en "Analizar Partido", el sistema enviará un prompt a Gemini.
+  - *Nota de desarrollo:* Deja una variable/constante `SYSTEM_ANALYSIS_PROMPT = ""` vacía en el backend/servicio de Gemini para que yo pueda ingresar mi prompt personalizado posteriormente.
+  - **Mapeo de Predicciones:** La respuesta formateada de Gemini debe mostrar las diferentes predicciones sugeridas junto con sus cuotas asociadas.
+- **Registro de Apuestas desde el Análisis:**
+  - Cada predicción individual devuelta debe incluir un botón **"Apostar"**.
+  - Al presionar "Apostar", se desplegará un formulario dinámico o modal con los campos: `Valor de la Apuesta` (input numérico) y `Cuota` (prellenado o editable).
+  - Un botón de confirmar que guarde este registro directamente en la base de datos de apuestas del usuario.
+
+#### 4. Módulo de Historial de Apuestas
+- Tabla o listado con todas las apuestas registradas por el usuario (Partido, Selección, Cuota, Monto apostado, Estado).
+- **Análisis de Resultado:** Sistema/interfaz que analice o consulte el resultado final del partido para determinar y marcar automáticamente (o de forma asistida) si la predicción se **Cumplió (Ganada)** o **No se cumplió (Perdida)**, calculando el retorno/ganancia.
+
+---
+
+### 🎨 Diseño y UX:
+- Interfaz moderna, limpia, profesional y **100% Responsive** (Mobile First).
+- Indicadores visuales claros para estados de suscripción (Activa/Inactiva), loaders mientras Gemini analiza partidos y alertas feedback al guardar o apostar.
+- Estructura modular del código bien organizada en carpetas de Frontend y Backend.

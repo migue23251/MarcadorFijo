@@ -3,13 +3,22 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Football betting prediction API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: users
+    description: User management
+  - name: config
+    description: User configuration (API keys)
+  - name: matches
+    description: Match radar and analysis
+  - name: bets
+    description: Bet management
+
 paths:
   /healthz:
     get:
@@ -24,6 +33,311 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /users/me:
+    get:
+      operationId: getMe
+      tags: [users]
+      summary: Get current user profile
+      responses:
+        "200":
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "401":
+          description: Unauthorized
+    put:
+      operationId: updateMe
+      tags: [users]
+      summary: Update current user profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserProfileUpdate"
+      responses:
+        "200":
+          description: Updated user profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "401":
+          description: Unauthorized
+
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List all users (admin only)
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserProfile"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+
+  /users/{userId}/subscription:
+    put:
+      operationId: updateUserSubscription
+      tags: [users]
+      summary: Toggle user subscription (admin only)
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionUpdate"
+      responses:
+        "200":
+          description: Updated user profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: User not found
+
+  /config/gemini-key:
+    get:
+      operationId: getGeminiKeyStatus
+      tags: [config]
+      summary: Check if user has a Gemini API key configured
+      responses:
+        "200":
+          description: Key status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeminiKeyStatus"
+        "401":
+          description: Unauthorized
+    put:
+      operationId: saveGeminiKey
+      tags: [config]
+      summary: Save or update user's Gemini API key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GeminiKeyInput"
+      responses:
+        "200":
+          description: Key saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeminiKeyStatus"
+        "401":
+          description: Unauthorized
+    delete:
+      operationId: deleteGeminiKey
+      tags: [config]
+      summary: Delete user's Gemini API key
+      responses:
+        "204":
+          description: Key deleted
+        "401":
+          description: Unauthorized
+
+  /matches/radar:
+    post:
+      operationId: radarMatches
+      tags: [matches]
+      summary: Fetch today's matches via Gemini AI
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RadarInput"
+      responses:
+        "200":
+          description: Today's matches grouped by league
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LeagueMatches"
+        "400":
+          description: No Gemini key configured
+        "401":
+          description: Unauthorized
+        "403":
+          description: Subscription required
+
+  /matches/analyze:
+    post:
+      operationId: analyzeMatch
+      tags: [matches]
+      summary: Analyze a match and get predictions via Gemini AI
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyzeInput"
+      responses:
+        "200":
+          description: Match analysis with predictions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MatchAnalysis"
+        "400":
+          description: No Gemini key configured
+        "401":
+          description: Unauthorized
+        "403":
+          description: Subscription required
+
+  /bets:
+    get:
+      operationId: listBets
+      tags: [bets]
+      summary: List all bets for the current user
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, won, lost]
+      responses:
+        "200":
+          description: List of bets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Bet"
+        "401":
+          description: Unauthorized
+    post:
+      operationId: createBet
+      tags: [bets]
+      summary: Register a new bet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BetInput"
+      responses:
+        "201":
+          description: Created bet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bet"
+        "401":
+          description: Unauthorized
+
+  /bets/stats:
+    get:
+      operationId: getBetStats
+      tags: [bets]
+      summary: Get betting statistics for current user
+      responses:
+        "200":
+          description: Betting statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BetStats"
+        "401":
+          description: Unauthorized
+
+  /bets/{betId}:
+    get:
+      operationId: getBet
+      tags: [bets]
+      summary: Get a specific bet
+      parameters:
+        - name: betId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Bet details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bet"
+        "401":
+          description: Unauthorized
+        "404":
+          description: Bet not found
+    put:
+      operationId: updateBet
+      tags: [bets]
+      summary: Update a bet (mark as won/lost)
+      parameters:
+        - name: betId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BetUpdate"
+      responses:
+        "200":
+          description: Updated bet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bet"
+        "401":
+          description: Unauthorized
+        "404":
+          description: Bet not found
+    delete:
+      operationId: deleteBet
+      tags: [bets]
+      summary: Delete a bet
+      parameters:
+        - name: betId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Bet deleted
+        "401":
+          description: Unauthorized
+        "404":
+          description: Bet not found
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +348,279 @@ components:
       required:
         - status
 
+    UserProfile:
+      type: object
+      required:
+        - clerkId
+        - email
+        - role
+        - activeSubscription
+      properties:
+        clerkId:
+          type: string
+        email:
+          type: string
+        name:
+          type: ["string", "null"]
+        role:
+          type: string
+          enum: [user, admin]
+        activeSubscription:
+          type: boolean
+        subscriptionExpiresAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    UserProfileUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+
+    SubscriptionUpdate:
+      type: object
+      required:
+        - activeSubscription
+      properties:
+        activeSubscription:
+          type: boolean
+        subscriptionExpiresAt:
+          type: ["string", "null"]
+
+    GeminiKeyStatus:
+      type: object
+      required:
+        - hasKey
+      properties:
+        hasKey:
+          type: boolean
+
+    GeminiKeyInput:
+      type: object
+      required:
+        - apiKey
+      properties:
+        apiKey:
+          type: string
+
+    RadarInput:
+      type: object
+      properties:
+        leagues:
+          type: array
+          items:
+            type: string
+
+    LeagueMatches:
+      type: object
+      required:
+        - league
+        - matches
+      properties:
+        league:
+          type: string
+        matches:
+          type: array
+          items:
+            $ref: "#/components/schemas/Match"
+
+    Match:
+      type: object
+      required:
+        - id
+        - homeTeam
+        - awayTeam
+        - kickoffTime
+        - league
+      properties:
+        id:
+          type: string
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        kickoffTime:
+          type: string
+        league:
+          type: string
+        stadium:
+          type: ["string", "null"]
+
+    AnalyzeInput:
+      type: object
+      required:
+        - homeTeam
+        - awayTeam
+        - league
+        - kickoffTime
+      properties:
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        league:
+          type: string
+        kickoffTime:
+          type: string
+
+    MatchAnalysis:
+      type: object
+      required:
+        - homeTeam
+        - awayTeam
+        - league
+        - summary
+        - predictions
+      properties:
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        league:
+          type: string
+        summary:
+          type: string
+        predictions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Prediction"
+
+    Prediction:
+      type: object
+      required:
+        - id
+        - market
+        - selection
+        - odds
+        - confidence
+      properties:
+        id:
+          type: string
+        market:
+          type: string
+        selection:
+          type: string
+        odds:
+          type: number
+        confidence:
+          type: string
+          enum: [low, medium, high]
+        reasoning:
+          type: ["string", "null"]
+
+    Bet:
+      type: object
+      required:
+        - id
+        - homeTeam
+        - awayTeam
+        - league
+        - kickoffTime
+        - market
+        - selection
+        - odds
+        - stake
+        - status
+        - createdAt
+      properties:
+        id:
+          type: integer
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        league:
+          type: string
+        kickoffTime:
+          type: string
+        market:
+          type: string
+        selection:
+          type: string
+        odds:
+          type: number
+        stake:
+          type: number
+        status:
+          type: string
+          enum: [pending, won, lost]
+        returnAmount:
+          type: ["number", "null"]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    BetInput:
+      type: object
+      required:
+        - homeTeam
+        - awayTeam
+        - league
+        - kickoffTime
+        - market
+        - selection
+        - odds
+        - stake
+      properties:
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        league:
+          type: string
+        kickoffTime:
+          type: string
+        market:
+          type: string
+        selection:
+          type: string
+        odds:
+          type: number
+        stake:
+          type: number
+        notes:
+          type: string
+
+    BetUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, won, lost]
+        returnAmount:
+          type: number
+        notes:
+          type: string
+
+    BetStats:
+      type: object
+      required:
+        - totalBets
+        - pendingBets
+        - wonBets
+        - lostBets
+        - totalStaked
+        - totalReturned
+        - roi
+        - winRate
+      properties:
+        totalBets:
+          type: integer
+        pendingBets:
+          type: integer
+        wonBets:
+          type: integer
+        lostBets:
+          type: integer
+        totalStaked:
+          type: number
+        totalReturned:
+          type: number
+        roi:
+          type: number
+        winRate:
+          type: number

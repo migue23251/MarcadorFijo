@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "Football Bets"
+version = "1.0.0"
+id = "artifacts/football-bets"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22535
+
+[services.development]
+run = "pnpm --filter @workspace/football-bets run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/football-bets", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/football-bets/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22535"
+BASE_PATH = "/"
