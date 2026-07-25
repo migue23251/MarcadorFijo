@@ -4,38 +4,39 @@ import { eq, and } from "drizzle-orm";
 
 const API_FOOTBALL_BASE = "https://api-football-v1.p.rapidapi.com/v3";
 
+/** Cache key used for the full-day fixture dump (single API call). */
+const ALL_FIXTURES_CACHE_KEY = "af_all";
+
 // ---------------------------------------------------------------------------
-// League configuration
+// League configuration — maps our display names to API-Football league IDs
 // ---------------------------------------------------------------------------
 
-interface LeagueConfig {
-  id: number;
-  /** "european" = season starts in July/Aug (e.g. 2025 means 2025/26).
-   *  "calendar" = season matches the calendar year (e.g. MLS 2026). */
-  season: "european" | "calendar";
-}
-
-const LEAGUE_CONFIG: Record<string, LeagueConfig> = {
-  "Premier League":    { id: 39,  season: "european" },
-  "La Liga":           { id: 140, season: "european" },
-  "Serie A":           { id: 135, season: "european" },
-  "Bundesliga":        { id: 78,  season: "european" },
-  "Ligue 1":           { id: 61,  season: "european" },
-  "Champions League":  { id: 2,   season: "european" },
-  "Europa League":     { id: 3,   season: "european" },
-  "Conference League": { id: 848, season: "european" },
-  "Eredivisie":        { id: 88,  season: "european" },
-  "Primeira Liga":     { id: 94,  season: "european" },
-  "Süper Lig":         { id: 203, season: "european" },
-  "MLS":               { id: 253, season: "calendar" },
-  "Liga MX":           { id: 262, season: "calendar" },
-  "Liga BetPlay":      { id: 239, season: "calendar" },
-  "Liga Profesional":  { id: 128, season: "calendar" },
-  "Brasileirão":       { id: 71,  season: "calendar" },
-  "LigaPro Ecuador":   { id: 334, season: "calendar" },
+const LEAGUE_ID_BY_NAME: Record<string, number> = {
+  "Premier League":    39,
+  "La Liga":           140,
+  "Serie A":           135,
+  "Bundesliga":        78,
+  "Ligue 1":           61,
+  "Champions League":  2,
+  "Europa League":     3,
+  "Conference League": 848,
+  "Eredivisie":        88,
+  "Primeira Liga":     94,
+  "Süper Lig":         203,
+  "MLS":               253,
+  "Liga MX":           262,
+  "Liga BetPlay":      239,
+  "Liga Profesional":  128,
+  "Brasileirão":       71,
+  "LigaPro Ecuador":   334,
 };
 
-export const DEFAULT_LEAGUES = Object.keys(LEAGUE_CONFIG);
+/** Reverse map: API-Football league ID → our display name */
+const LEAGUE_NAME_BY_ID: Record<number, string> = Object.fromEntries(
+  Object.entries(LEAGUE_ID_BY_NAME).map(([name, id]) => [id, name]),
+);
+
+export const DEFAULT_LEAGUES = Object.keys(LEAGUE_ID_BY_NAME);
 
 // ---------------------------------------------------------------------------
 // Types
@@ -58,16 +59,6 @@ export interface ApiFootballMatch {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function getSeasonYear(seasonType: "european" | "calendar"): number {
-  const now = new Date();
-  const year = now.getUTCFullYear();
-  const month = now.getUTCMonth() + 1; // 1–12
-
-  if (seasonType === "calendar") return year;
-  // European seasons start Jul/Aug — before July the ongoing season started last year
-  return month >= 7 ? year : year - 1;
-}
 
 function mapStatus(short: string): string {
   switch (short) {
@@ -113,18 +104,16 @@ function parseFixture(
   };
 }
 
-async function fetchFixtures(
-  leagueId: number,
-  season: number,
-  date: string,
-): Promise<any[]> {
+/**
+ * Fetch ALL fixtures for a given date in one API call.
+ * Free tier allows 10 req/min and 100 req/day — one call covers every league.
+ */
+async function fetchAllFixturesForDate(date: string): Promise<any[]> {
   const apiKey = process.env["RAPIDAPI_KEY"];
   if (!apiKey) throw new Error("RAPIDAPI_KEY is not configured");
 
   const url = new URL(`${API_FOOTBALL_BASE}/fixtures`);
   url.searchParams.set("date", date);
-  url.searchParams.set("league", String(leagueId));
-  url.searchParams.set("season", String(season));
 
   const response = await fetch(url.toString(), {
     headers: {
@@ -147,80 +136,84 @@ async function fetchFixtures(
 // ---------------------------------------------------------------------------
 
 /**
- * Fetch today's fixtures from API-Football, one league at a time.
- * Results are cached in radar_cache (key: "af_<leagueId>") per day.
- * Leagues with live matches are NOT cached so they refresh on the next call.
+ * Fetch today's fixtures from API-Football using ONE API call for all leagues.
+ * The full day's fixture list is cached in radar_cache under ALL_FIXTURES_CACHE_KEY.
+ * Live matches bypass the cache so scores stay fresh.
  */
 export async function getMatchesFromApiFootball(
   leagues?: string[],
 ): Promise<{ league: string; matches: ApiFootballMatch[] }[]> {
   const date = new Date().toISOString().split("T")[0];
-  const requestedLeagues =
-    leagues && leagues.length > 0 ? leagues : DEFAULT_LEAGUES;
+  const wantedLeagueIds = new Set(
+    (leagues && leagues.length > 0
+      ? leagues
+      : Object.keys(LEAGUE_ID_BY_NAME)
+    ).map((name) => LEAGUE_ID_BY_NAME[name]).filter(Boolean),
+  );
 
-  const results = new Map<string, ApiFootballMatch[]>();
+  // 1. Try cache (single row covers all leagues for today)
+  const cached = await db
+    .select()
+    .from(radarCacheTable)
+    .where(
+      and(
+        eq(radarCacheTable.date, date),
+        eq(radarCacheTable.league, ALL_FIXTURES_CACHE_KEY),
+      ),
+    )
+    .limit(1);
 
-  for (const leagueName of requestedLeagues) {
-    const config = LEAGUE_CONFIG[leagueName];
-    if (!config) continue;
+  let allFixtures: ApiFootballMatch[];
 
-    const cacheKey = `af_${config.id}`;
-
-    // 1. Try cache
-    const cached = await db
-      .select()
-      .from(radarCacheTable)
-      .where(
-        and(
-          eq(radarCacheTable.date, date),
-          eq(radarCacheTable.league, cacheKey),
-        ),
-      )
-      .limit(1);
-
-    if (cached.length > 0) {
-      logger.info({ leagueName }, "Radar cache hit (API-Football)");
-      results.set(leagueName, JSON.parse(cached[0].result) as ApiFootballMatch[]);
-      continue;
-    }
-
-    // 2. Fetch from API-Football
+  if (cached.length > 0) {
+    logger.info({ date }, "Radar cache hit (API-Football all-fixtures)");
+    allFixtures = JSON.parse(cached[0].result) as ApiFootballMatch[];
+  } else {
+    // 2. One API call — all leagues for today
     try {
-      const season = getSeasonYear(config.season);
-      const fixtures = await fetchFixtures(config.id, season, date);
-      const matches: ApiFootballMatch[] = fixtures.map((f) => ({
-        ...parseFixture(f, leagueName),
-        hasAnalysis: false,
-      }));
+      const raw = await fetchAllFixturesForDate(date);
+      allFixtures = raw
+        .filter((f) => {
+          const leagueId: number = f?.league?.id;
+          return leagueId && LEAGUE_NAME_BY_ID[leagueId] !== undefined;
+        })
+        .map((f) => {
+          const leagueName = LEAGUE_NAME_BY_ID[f.league.id as number];
+          return { ...parseFixture(f, leagueName), hasAnalysis: false };
+        });
 
-      results.set(leagueName, matches);
+      logger.info({ date, total: allFixtures.length }, "API-Football all-fixtures fetched");
 
-      // 3. Only cache if no match is currently live (live data changes every minute)
-      const hasLive = matches.some(
+      // 3. Cache only if no live matches (live scores change every minute)
+      const hasLive = allFixtures.some(
         (m) => m.status === "live" || m.status === "halftime",
       );
       if (!hasLive) {
         await db
           .insert(radarCacheTable)
-          .values({ date, league: cacheKey, result: JSON.stringify(matches) })
+          .values({
+            date,
+            league: ALL_FIXTURES_CACHE_KEY,
+            result: JSON.stringify(allFixtures),
+          })
           .catch((err) =>
-            logger.warn({ err, leagueName }, "Failed to cache API-Football result"),
+            logger.warn({ err }, "Failed to cache all-fixtures result"),
           );
       }
-
-      logger.info(
-        { leagueName, count: matches.length, season, hasLive },
-        "API-Football fixtures fetched",
-      );
     } catch (err) {
-      logger.error({ err, leagueName }, "API-Football fetch failed");
-      results.set(leagueName, []);
+      logger.error({ err }, "API-Football all-fixtures fetch failed");
+      throw err; // propagate so the route returns a 502
     }
   }
 
-  // 4. Enrich with hasAnalysis from analysis_cache
-  const allMatches = Array.from(results.values()).flat();
-  if (allMatches.length > 0) {
+  // 4. Filter to the leagues the caller requested
+  const filtered = allFixtures.filter((m) => {
+    const id = LEAGUE_ID_BY_NAME[m.league];
+    return id !== undefined && wantedLeagueIds.has(id);
+  });
+
+  // 5. Enrich with hasAnalysis from analysis_cache
+  if (filtered.length > 0) {
     try {
       const analysedToday = await db
         .select({
@@ -238,19 +231,24 @@ export async function getMatchesFromApiFootball(
         ),
       );
 
-      for (const matches of results.values()) {
-        for (const m of matches) {
-          const key = `${m.homeTeam.toLowerCase()}|${m.awayTeam.toLowerCase()}|${m.league.toLowerCase()}`;
-          m.hasAnalysis = analysedSet.has(key);
-        }
+      for (const m of filtered) {
+        const key = `${m.homeTeam.toLowerCase()}|${m.awayTeam.toLowerCase()}|${m.league.toLowerCase()}`;
+        m.hasAnalysis = analysedSet.has(key);
       }
     } catch (err) {
       logger.warn({ err }, "Failed to enrich matches with hasAnalysis flag");
     }
   }
 
-  // 5. Return only leagues with matches, preserving request order
-  return requestedLeagues
-    .filter((l) => (results.get(l) ?? []).length > 0)
-    .map((league) => ({ league, matches: results.get(league)! }));
+  // 6. Group by league, preserving the order of LEAGUE_ID_BY_NAME
+  const byLeague = new Map<string, ApiFootballMatch[]>();
+  for (const m of filtered) {
+    const arr = byLeague.get(m.league) ?? [];
+    arr.push(m);
+    byLeague.set(m.league, arr);
+  }
+
+  return Object.keys(LEAGUE_ID_BY_NAME)
+    .filter((name) => byLeague.has(name) && wantedLeagueIds.has(LEAGUE_ID_BY_NAME[name]))
+    .map((league) => ({ league, matches: byLeague.get(league)! }));
 }
