@@ -6,7 +6,7 @@ import {
   type AuthenticatedRequest,
 } from "../lib/auth";
 import { getUserGeminiKey } from "./config";
-import { getRadarMatches, analyzeMatch } from "../lib/gemini";
+import { getRadarMatches, analyzeMatch, GeminiApiError } from "../lib/gemini";
 
 const router: IRouter = Router();
 
@@ -32,10 +32,18 @@ router.post(
       return;
     }
 
-    const leagues = parsed.data.leagues;
-    const results = await getRadarMatches(apiKey, leagues);
-
-    res.json(results);
+    try {
+      const leagues = parsed.data.leagues;
+      const results = await getRadarMatches(apiKey, leagues);
+      res.json(results);
+    } catch (err) {
+      if (err instanceof GeminiApiError) {
+        const httpStatus = err.status === 429 ? 429 : err.status === 400 ? 400 : err.status === 403 ? 403 : 502;
+        res.status(httpStatus).json({ error: err.message });
+        return;
+      }
+      throw err;
+    }
   },
 );
 
@@ -61,10 +69,18 @@ router.post(
       return;
     }
 
-    const { homeTeam, awayTeam, league, kickoffTime } = parsed.data;
-    const analysis = await analyzeMatch(apiKey, homeTeam, awayTeam, league, kickoffTime);
-
-    res.json(analysis);
+    try {
+      const { homeTeam, awayTeam, league, kickoffTime } = parsed.data;
+      const analysis = await analyzeMatch(apiKey, homeTeam, awayTeam, league, kickoffTime);
+      res.json(analysis);
+    } catch (err) {
+      if (err instanceof GeminiApiError) {
+        const httpStatus = err.status === 429 ? 429 : err.status === 400 ? 400 : err.status === 403 ? 403 : 502;
+        res.status(httpStatus).json({ error: err.message });
+        return;
+      }
+      throw err;
+    }
   },
 );
 

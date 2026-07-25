@@ -31,6 +31,16 @@ interface GeminiAnalysis {
   predictions: GeminiPrediction[];
 }
 
+export class GeminiApiError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "GeminiApiError";
+  }
+}
+
 async function callGemini(apiKey: string, prompt: string): Promise<string> {
   const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
     method: "POST",
@@ -46,8 +56,24 @@ async function callGemini(apiKey: string, prompt: string): Promise<string> {
   });
 
   if (!response.ok) {
-    const err = await response.text().catch(() => "");
-    throw new Error(`Gemini API error ${response.status}: ${err}`);
+    const body = await response.json().catch(() => null);
+    const geminiMessage: string = body?.error?.message ?? "";
+
+    let userMessage: string;
+    if (response.status === 429) {
+      const retryMatch = geminiMessage.match(/retry in ([\d.]+)s/i);
+      const retrySecs = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : null;
+      userMessage = retrySecs
+        ? `Has superado la cuota de Gemini. Intenta de nuevo en ${retrySecs} segundos.`
+        : "Has superado la cuota de Gemini. Revisa tu plan y facturación en https://ai.dev/rate-limit";
+    } else if (response.status === 400) {
+      userMessage = "API Key de Gemini inválida. Verifica la clave en Configuración.";
+    } else if (response.status === 403) {
+      userMessage = "API Key de Gemini sin permisos. Verifica que la clave tenga acceso a la API.";
+    } else {
+      userMessage = `Error de Gemini (${response.status}). Inténtalo de nuevo.`;
+    }
+    throw new GeminiApiError(response.status, userMessage);
   }
 
   const data = await response.json();

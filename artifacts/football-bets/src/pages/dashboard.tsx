@@ -180,6 +180,16 @@ export default function Dashboard() {
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none z-10" />
       </div>
 
+      {radarMutation.isError && (
+        <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-4 rounded-md flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-semibold mb-1">Error al desplegar el radar</p>
+            <p>{(radarMutation.error as any)?.data?.error ?? (radarMutation.error as Error)?.message ?? "Error inesperado. Inténtalo de nuevo."}</p>
+          </div>
+        </div>
+      )}
+
       {radarMutation.isSuccess && radarMutation.data && (
         <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-700">
           <div className="flex items-center gap-2 border-b border-border pb-2">
