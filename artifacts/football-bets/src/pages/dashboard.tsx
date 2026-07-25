@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useRef, useCallback } from "react";
 import { 
   useGetMe, 
   getGetMeQueryKey, 
@@ -61,8 +61,7 @@ export default function Dashboard() {
 
   const radarMutation = useRadarMatches();
   const [selectedLeagues, setSelectedLeagues] = useState<string[]>([]);
-  const [retryCountdown, setRetryCountdown] = useState<number | null>(null);
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const radarRequestLockedRef = useRef(false);
 
   const toggleLeague = (label: string) => {
     setSelectedLeagues(prev =>
@@ -71,42 +70,21 @@ export default function Dashboard() {
   };
 
   const handleRadarScan = useCallback(() => {
-    // Clear any active countdown before firing
-    if (countdownRef.current) clearInterval(countdownRef.current);
-    setRetryCountdown(null);
+    // Lock synchronously so two rapid clicks cannot create two Gemini calls
+    // before React has re-rendered with isPending=true.
+    if (radarRequestLockedRef.current || radarMutation.isPending) return;
+
+    radarRequestLockedRef.current = true;
     radarMutation.mutate({
-      data: { leagues: selectedLeagues.length > 0 ? selectedLeagues : undefined }
+      data: {
+        leagues: selectedLeagues.length > 0 ? [...selectedLeagues] : undefined,
+      },
+    }, {
+      onSettled: () => {
+        radarRequestLockedRef.current = false;
+      },
     });
   }, [radarMutation, selectedLeagues]);
-
-  // Start countdown when a 429 error with retryAfter arrives
-  useEffect(() => {
-    const errData = (radarMutation.error as any)?.data as { error?: string; retryAfter?: number } | undefined;
-    const retryAfter = errData?.retryAfter;
-    if (!radarMutation.isError || !retryAfter) return;
-
-    setRetryCountdown(retryAfter);
-    countdownRef.current = setInterval(() => {
-      setRetryCountdown(prev => {
-        if (prev === null || prev <= 1) {
-          clearInterval(countdownRef.current!);
-          return null;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => { if (countdownRef.current) clearInterval(countdownRef.current); };
-  }, [radarMutation.isError, radarMutation.error]);
-
-  // Auto-retry when countdown reaches 0
-  useEffect(() => {
-    if (retryCountdown === null && radarMutation.isError && (radarMutation.error as any)?.data?.retryAfter) {
-      // countdown just finished — fire automatically
-      handleRadarScan();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [retryCountdown]);
 
   const isActive = me?.activeSubscription;
   const hasKey = keyStatus?.hasKey;
@@ -225,30 +203,20 @@ export default function Dashboard() {
             <div className="text-sm flex-1">
               <p className="font-semibold mb-1">Cuota de Gemini agotada temporalmente</p>
               <p className="text-amber-300/80 mb-3">{errorMsg}</p>
-              {retryCountdown !== null ? (
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded px-3 py-1.5">
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span className="font-mono font-bold text-amber-300">
-                      Reintentando en {retryCountdown}s…
-                    </span>
-                  </div>
-                  <button
-                    onClick={handleRadarScan}
-                    className="text-xs underline text-amber-400 hover:text-amber-300 transition-colors"
-                  >
-                    Reintentar ahora
-                  </button>
-                </div>
-              ) : (
+              <div className="flex items-center gap-3">
+                <p className="text-xs text-amber-300/80">
+                  {errData?.retryAfter
+                    ? `Espera aproximadamente ${errData.retryAfter} segundos antes de volver a intentarlo.`
+                    : "Espera unos segundos antes de volver a intentarlo."}
+                </p>
                 <button
                   onClick={handleRadarScan}
                   disabled={radarMutation.isPending}
-                  className="flex items-center gap-2 px-4 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 rounded text-xs font-semibold transition-colors"
+                  className="flex items-center gap-2 px-4 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 rounded text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <RefreshCw className="w-3.5 h-3.5" /> Reintentar
+                  <RefreshCw className="w-3.5 h-3.5" /> Reintentar manualmente
                 </button>
-              )}
+              </div>
             </div>
           </div>
         ) : (
@@ -293,19 +261,31 @@ export default function Dashboard() {
 function MatchCard({ match, leagueName }: { match: Match, leagueName: string }) {
   const [expanded, setExpanded] = useState(false);
   const analyzeMutation = useAnalyzeMatch();
+  const analyzeRequestLockedRef = useRef(false);
 
   const handleAnalyze = () => {
-    if (!expanded && !analyzeMutation.data && !analyzeMutation.isPending) {
-      analyzeMutation.mutate({
-        data: {
-          homeTeam: match.homeTeam,
-          awayTeam: match.awayTeam,
-          league: leagueName,
-          kickoffTime: match.kickoffTime
-        }
-      });
+    if (analyzeMutation.isPending || analyzeRequestLockedRef.current) return;
+
+    if (analyzeMutation.data) {
+      setExpanded((current) => !current);
+      return;
     }
-    setExpanded(!expanded);
+
+    // Analysis is only requested from this explicit button click.
+    analyzeRequestLockedRef.current = true;
+    setExpanded(true);
+    analyzeMutation.mutate({
+      data: {
+        homeTeam: match.homeTeam,
+        awayTeam: match.awayTeam,
+        league: leagueName,
+        kickoffTime: match.kickoffTime
+      },
+    }, {
+      onSettled: () => {
+        analyzeRequestLockedRef.current = false;
+      },
+    });
   };
 
   const isAnalyzing = analyzeMutation.isPending;
@@ -331,7 +311,7 @@ function MatchCard({ match, leagueName }: { match: Match, leagueName: string }) 
         <div className="ml-4 flex flex-col items-end justify-center">
           <button 
             onClick={handleAnalyze}
-            disabled={isAnalyzing}
+            disabled={isAnalyzing || analyzeRequestLockedRef.current}
             className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-md font-medium text-sm transition-colors border border-border"
           >
             {isAnalyzing ? (
