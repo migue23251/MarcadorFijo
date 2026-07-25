@@ -31,6 +31,10 @@ const AVAILABLE_LEAGUES = [
   { id: "super_lig",        label: "Süper Lig",          flag: "🇹🇷" },
   { id: "mls",              label: "MLS",                flag: "🇺🇸" },
   { id: "liga_mx",          label: "Liga MX",            flag: "🇲🇽" },
+  { id: "liga_betplay",     label: "Liga BetPlay",       flag: "🇨🇴" },
+  { id: "liga_profesional", label: "Liga Profesional",   flag: "🇦🇷" },
+  { id: "brasileirao",      label: "Brasileirão",        flag: "🇧🇷" },
+  { id: "liga_pro_ecuador", label: "LigaPro Ecuador",    flag: "🇪🇨" },
 ];
 
 function Badge({ children, variant = "default", className = "" }: { children: React.ReactNode, variant?: "default" | "success" | "warning" | "danger" | "outline", className?: string }) {
