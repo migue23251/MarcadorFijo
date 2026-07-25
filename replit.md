@@ -50,6 +50,14 @@ A full-stack football betting management and prediction app powered by Gemini AI
 - **Configuración (`/configuracion`):** Gemini API key management, subscription status display, profile update.
 - **Admin (`/admin`):** User management table with subscription toggle switches.
 
+## Setup status
+
+Project is fully set up and running on Replit:
+- Dependencies installed via `pnpm install --recursive`
+- Clerk auth provisioned (Replit-managed) — keys auto-set in secrets
+- PostgreSQL database connected and schema pushed via `pnpm --filter @workspace/db run push`
+- All three workflows running: frontend (port 22535), API server (port 8080), mockup sandbox
+
 ## User preferences
 
 _Populate as you build — explicit user instructions worth remembering across sessions._
