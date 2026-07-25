@@ -59,14 +59,27 @@ export interface RadarInput {
   leagues?: string[];
 }
 
+export interface MatchScore {
+  /** @nullable */
+  home: number | null;
+  /** @nullable */
+  away: number | null;
+}
+
 export interface Match {
   id: string;
+  /** @nullable */
+  apiFootballId?: number | null;
   homeTeam: string;
   awayTeam: string;
   kickoffTime: string;
   league: string;
   /** @nullable */
   stadium?: string | null;
+  /** scheduled | live | halftime | finished | postponed */
+  status: string;
+  score?: MatchScore | null;
+  hasAnalysis: boolean;
 }
 
 export interface LeagueMatches {

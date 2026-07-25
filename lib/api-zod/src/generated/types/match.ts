@@ -5,15 +5,20 @@
  * Football betting prediction API
  * OpenAPI spec version: 0.1.0
  */
+import type { MatchScore } from './matchScore';
 
 export interface Match {
   id: string;
+  /** @nullable */
+  apiFootballId?: number | null;
   homeTeam: string;
   awayTeam: string;
   kickoffTime: string;
   league: string;
   /** @nullable */
   stadium?: string | null;
-  /** True when this match already has a cached analysis in the DB */
-  hasAnalysis?: boolean;
+  /** scheduled | live | halftime | finished | postponed */
+  status: string;
+  score?: MatchScore | null;
+  hasAnalysis: boolean;
 }

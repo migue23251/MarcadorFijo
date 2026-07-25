@@ -13,6 +13,7 @@ A full-stack football betting management and prediction app powered by Gemini AI
 - `pnpm --filter @workspace/db run seed` — insert seed data (admin user)
 - Required env: `DATABASE_URL` — Postgres connection string
 - Required env: `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`, `VITE_CLERK_PUBLISHABLE_KEY` — auto-provisioned via Clerk
+- Required env: `RAPIDAPI_KEY` — API-Football key from RapidAPI (100 req/day free tier)
 - Optional env: `ENCRYPTION_KEY` — AES-256-GCM key for Gemini API key encryption (falls back to SESSION_SECRET)
 
 ## Stack
@@ -46,7 +47,7 @@ A full-stack football betting management and prediction app powered by Gemini AI
 ## Product
 
 - **Landing page:** Public marketing page for unauthenticated users
-- **Dashboard (`/dashboard`):** Radar de Partidos button → Gemini fetches today's matches grouped by league. Each match has "Analizar Partido" → Gemini returns predictions. Each prediction has "Apostar" → bet registration modal.
+- **Dashboard (`/dashboard`):** Radar de Partidos button → API-Football fetches today's real fixtures grouped by league (with live scores + match status). Each match has "Analizar Partido" → Gemini returns predictions. Each prediction has "Apostar" → bet registration modal.
 - **Historial (`/historial`):** Full bet history with ROI stats, win rate, filter by status. One-click mark as Ganada/Perdida.
 - **Configuración (`/configuracion`):** Gemini API key management, subscription status display, profile update.
 - **Admin (`/admin`):** User management table with subscription toggle switches.

@@ -6,7 +6,8 @@ import {
   type AuthenticatedRequest,
 } from "../lib/auth";
 import { getUserGeminiKey, getUserGeminiModel } from "./config";
-import { getRadarMatches, analyzeMatch, GeminiApiError } from "../lib/gemini";
+import { analyzeMatch, GeminiApiError } from "../lib/gemini";
+import { getMatchesFromApiFootball } from "../lib/api-football";
 import { db, analysisCacheTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 
@@ -53,48 +54,30 @@ router.get(
   },
 );
 
-// POST /matches/radar
+// POST /matches/radar — fetches today's fixtures from API-Football (no Gemini key needed)
 router.post(
   "/matches/radar",
   requireAuth,
   requireSubscription,
   async (req, res): Promise<void> => {
-    const user = (req as AuthenticatedRequest).dbUser;
-
     const parsed = RadarMatchesBody.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.message });
       return;
     }
 
-    const apiKey = await getUserGeminiKey(user.clerkId);
-    if (!apiKey) {
-      res
-        .status(400)
-        .json({ error: "No tienes una API Key de Gemini configurada. Configúrala en Ajustes." });
-      return;
-    }
-
     try {
-      const model = await getUserGeminiModel(user.clerkId);
       const leagues = parsed.data.leagues;
-      const results = await getRadarMatches(apiKey, model, leagues);
+      const results = await getMatchesFromApiFootball(leagues);
       res.json(results);
     } catch (err) {
-      if (err instanceof GeminiApiError) {
-        const httpStatus = [400, 403, 404, 429].includes(err.status) ? err.status : 502;
-        res.status(httpStatus).json({
-          error: err.message,
-          ...(err.retryAfter !== undefined && { retryAfter: err.retryAfter }),
-        });
-        return;
-      }
-      throw err;
+      const message = err instanceof Error ? err.message : "Error al obtener partidos";
+      res.status(502).json({ error: message });
     }
   },
 );
 
-// POST /matches/analyze
+// POST /matches/analyze — Gemini prediction (still requires user Gemini key)
 router.post(
   "/matches/analyze",
   requireAuth,

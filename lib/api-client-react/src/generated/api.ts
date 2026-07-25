@@ -818,7 +818,7 @@ export const getRadarMatchesUrl = () => {
 }
 
 /**
- * @summary Fetch today's matches via Gemini AI
+ * @summary Fetch today's matches via API-Football
  */
 export const radarMatches = async (radarInput: RadarInput, options?: RequestInit): Promise<LeagueMatches[]> => {
 
@@ -867,7 +867,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type RadarMatchesMutationError = ErrorType<void>
 
     /**
- * @summary Fetch today's matches via Gemini AI
+ * @summary Fetch today's matches via API-Football
  */
 export const useRadarMatches = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof radarMatches>>, TError,{data: BodyType<RadarInput>}, TContext>, request?: SecondParameter<typeof customFetch>}

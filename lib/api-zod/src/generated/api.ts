@@ -134,7 +134,7 @@ export const DeleteGeminiKeyResponse = zod.void()
 
 
 /**
- * @summary Fetch today's matches via Gemini AI
+ * @summary Fetch today's matches via API-Football
  */
 export const RadarMatchesBody = zod.object({
   "leagues": zod.array(zod.string()).optional()
@@ -144,11 +144,18 @@ export const RadarMatchesResponseItem = zod.object({
   "league": zod.string(),
   "matches": zod.array(zod.object({
   "id": zod.string(),
+  "apiFootballId": zod.number().nullish(),
   "homeTeam": zod.string(),
   "awayTeam": zod.string(),
   "kickoffTime": zod.string(),
   "league": zod.string(),
-  "stadium": zod.string().nullish()
+  "stadium": zod.string().nullish(),
+  "status": zod.string().describe('scheduled | live | halftime | finished | postponed'),
+  "score": zod.union([zod.object({
+  "home": zod.number().nullable(),
+  "away": zod.number().nullable()
+}),zod.null()]).optional(),
+  "hasAnalysis": zod.boolean()
 }))
 })
 export const RadarMatchesResponse = zod.array(RadarMatchesResponseItem)

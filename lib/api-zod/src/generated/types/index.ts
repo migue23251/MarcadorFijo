@@ -24,6 +24,7 @@ export * from './listBetsParams';
 export * from './listBetsStatus';
 export * from './match';
 export * from './matchAnalysis';
+export * from './matchScore';
 export * from './prediction';
 export * from './predictionConfidence';
 export * from './radarInput';

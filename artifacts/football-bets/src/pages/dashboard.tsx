@@ -2,49 +2,50 @@ import { useState, useRef, useCallback } from "react";
 import { 
   useGetMe, 
   getGetMeQueryKey, 
-  useGetGeminiKeyStatus, 
-  getGetGeminiKeyStatusQueryKey,
   useRadarMatches,
   useAnalyzeMatch,
   useGetCachedAnalysis,
+  getGetCachedAnalysisQueryKey,
   useCreateBet,
   getListBetsQueryKey,
   getGetBetStatsQueryKey,
   Match,
   Prediction
 } from "@workspace/api-client-react";
-import { Radar, AlertTriangle, ChevronDown, Check, Loader2, Target, Info, Trophy, Clock, RefreshCw } from "lucide-react";
+import { Radar, AlertTriangle, ChevronDown, Check, Loader2, Target, Info, Trophy, Clock, RefreshCw, Activity } from "lucide-react";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import * as Dialog from "@radix-ui/react-dialog";
 
 const AVAILABLE_LEAGUES = [
-  { id: "premier_league",   label: "Premier League",    flag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿" },
-  { id: "la_liga",          label: "La Liga",            flag: "🇪🇸" },
-  { id: "bundesliga",       label: "Bundesliga",         flag: "🇩🇪" },
-  { id: "serie_a",          label: "Serie A",            flag: "🇮🇹" },
-  { id: "ligue_1",          label: "Ligue 1",            flag: "🇫🇷" },
-  { id: "champions_league", label: "Champions League",   flag: "⭐" },
-  { id: "europa_league",    label: "Europa League",      flag: "🟠" },
-  { id: "eredivisie",       label: "Eredivisie",         flag: "🇳🇱" },
-  { id: "primeira_liga",    label: "Primeira Liga",      flag: "🇵🇹" },
-  { id: "super_lig",        label: "Süper Lig",          flag: "🇹🇷" },
-  { id: "mls",              label: "MLS",                flag: "🇺🇸" },
-  { id: "liga_mx",          label: "Liga MX",            flag: "🇲🇽" },
-  { id: "liga_betplay",     label: "Liga BetPlay",       flag: "🇨🇴" },
-  { id: "liga_profesional", label: "Liga Profesional",   flag: "🇦🇷" },
-  { id: "brasileirao",      label: "Brasileirão",        flag: "🇧🇷" },
-  { id: "liga_pro_ecuador", label: "LigaPro Ecuador",    flag: "🇪🇨" },
+  { id: "premier_league",    label: "Premier League",    flag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿" },
+  { id: "la_liga",           label: "La Liga",            flag: "🇪🇸" },
+  { id: "bundesliga",        label: "Bundesliga",         flag: "🇩🇪" },
+  { id: "serie_a",           label: "Serie A",            flag: "🇮🇹" },
+  { id: "ligue_1",           label: "Ligue 1",            flag: "🇫🇷" },
+  { id: "champions_league",  label: "Champions League",   flag: "⭐" },
+  { id: "europa_league",     label: "Europa League",      flag: "🟠" },
+  { id: "conference_league", label: "Conference League",  flag: "🔵" },
+  { id: "eredivisie",        label: "Eredivisie",         flag: "🇳🇱" },
+  { id: "primeira_liga",     label: "Primeira Liga",      flag: "🇵🇹" },
+  { id: "super_lig",         label: "Süper Lig",          flag: "🇹🇷" },
+  { id: "mls",               label: "MLS",                flag: "🇺🇸" },
+  { id: "liga_mx",           label: "Liga MX",            flag: "🇲🇽" },
+  { id: "liga_betplay",      label: "Liga BetPlay",       flag: "🇨🇴" },
+  { id: "liga_profesional",  label: "Liga Profesional",   flag: "🇦🇷" },
+  { id: "brasileirao",       label: "Brasileirão",        flag: "🇧🇷" },
+  { id: "ligapro_ecuador",   label: "LigaPro Ecuador",    flag: "🇪🇨" },
 ];
 
-function Badge({ children, variant = "default", className = "" }: { children: React.ReactNode, variant?: "default" | "success" | "warning" | "danger" | "outline", className?: string }) {
+function Badge({ children, variant = "default", className = "" }: { children: React.ReactNode, variant?: "default" | "success" | "warning" | "danger" | "outline" | "live", className?: string }) {
   const variants = {
-    default: "bg-primary/20 text-primary border border-primary/30",
-    success: "bg-emerald-500/20 text-emerald-500 border border-emerald-500/30",
-    warning: "bg-yellow-500/20 text-yellow-500 border border-yellow-500/30",
-    danger: "bg-red-500/20 text-red-500 border border-red-500/30",
-    outline: "bg-transparent text-muted-foreground border border-border"
+    default:  "bg-primary/20 text-primary border border-primary/30",
+    success:  "bg-emerald-500/20 text-emerald-500 border border-emerald-500/30",
+    warning:  "bg-yellow-500/20 text-yellow-500 border border-yellow-500/30",
+    danger:   "bg-red-500/20 text-red-500 border border-red-500/30",
+    outline:  "bg-transparent text-muted-foreground border border-border",
+    live:     "bg-red-500/90 text-white border border-red-400 animate-pulse",
   };
   return (
     <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${variants[variant]} ${className}`}>
@@ -53,12 +54,21 @@ function Badge({ children, variant = "default", className = "" }: { children: Re
   );
 }
 
+function StatusBadge({ status }: { status: string }) {
+  switch (status) {
+    case "live":      return <Badge variant="live"><span className="flex items-center gap-1"><Activity className="w-2.5 h-2.5" />En Vivo</span></Badge>;
+    case "halftime":  return <Badge variant="warning">Descanso</Badge>;
+    case "finished":  return <Badge variant="outline">Finalizado</Badge>;
+    case "postponed": return <Badge variant="danger">Pospuesto</Badge>;
+    default:          return null; // "scheduled" — no badge needed, kickoff time is shown
+  }
+}
+
 export default function Dashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const { data: me } = useGetMe({ query: { queryKey: getGetMeQueryKey() } });
-  const { data: keyStatus } = useGetGeminiKeyStatus({ query: { queryKey: getGetGeminiKeyStatusQueryKey() } });
 
   const radarMutation = useRadarMatches();
   const [selectedLeagues, setSelectedLeagues] = useState<string[]>([]);
@@ -71,31 +81,25 @@ export default function Dashboard() {
   };
 
   const handleRadarScan = useCallback(() => {
-    // Lock synchronously so two rapid clicks cannot create two Gemini calls
-    // before React has re-rendered with isPending=true.
     if (radarRequestLockedRef.current || radarMutation.isPending) return;
-
     radarRequestLockedRef.current = true;
     radarMutation.mutate({
       data: {
         leagues: selectedLeagues.length > 0 ? [...selectedLeagues] : undefined,
       },
     }, {
-      onSettled: () => {
-        radarRequestLockedRef.current = false;
-      },
+      onSettled: () => { radarRequestLockedRef.current = false; },
     });
   }, [radarMutation, selectedLeagues]);
 
   const isActive = me?.activeSubscription;
-  const hasKey = keyStatus?.hasKey;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Centro de Operaciones</h1>
-          <p className="text-muted-foreground">Analiza el mercado y detecta valor.</p>
+          <p className="text-muted-foreground">Partidos reales · Predicciones con Gemini AI.</p>
         </div>
         <div className="flex items-center gap-3 bg-card px-4 py-2 rounded-md border border-border">
           <span className="text-sm font-medium">Estado:</span>
@@ -106,16 +110,6 @@ export default function Dashboard() {
           )}
         </div>
       </header>
-
-      {!hasKey && (
-        <div className="bg-yellow-500/10 border border-yellow-500/30 text-yellow-500 p-4 rounded-md flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
-          <div className="text-sm">
-            <p className="font-semibold mb-1">Falta API Key de Gemini</p>
-            <p>Configura tu API Key de Gemini en <Link href="/configuracion" className="underline font-medium hover:text-yellow-400">Configuración</Link> para usar el Radar.</p>
-          </div>
-        </div>
-      )}
 
       {/* League selector */}
       <div className="bg-card border border-border rounded-xl p-5 space-y-4">
@@ -159,20 +153,19 @@ export default function Dashboard() {
         </div>
         <p className="text-xs text-muted-foreground">
           {selectedLeagues.length === 0
-            ? "Sin selección: Gemini buscará en todas las ligas relevantes del día."
-            : `El radar buscará partidos solo en: ${selectedLeagues.join(", ")}.`}
+            ? "Sin selección: el radar buscará en todas las ligas disponibles."
+            : `El radar buscará partidos en: ${selectedLeagues.join(", ")}.`}
         </p>
       </div>
 
       <div className="relative rounded-xl border border-border bg-card overflow-hidden">
         <div className="p-8 flex flex-col items-center justify-center min-h-[260px] text-center relative z-20">
-          
           <button
             onClick={handleRadarScan}
-            disabled={!isActive || !hasKey || radarMutation.isPending}
+            disabled={!isActive || radarMutation.isPending}
             className={`relative group flex flex-col items-center justify-center w-40 h-40 rounded-full transition-all duration-500 ${
               radarMutation.isPending ? "bg-primary/20 scale-105" : 
-              (!isActive || !hasKey) ? "bg-muted cursor-not-allowed opacity-50" : 
+              !isActive ? "bg-muted cursor-not-allowed opacity-50" : 
               "bg-primary/10 hover:bg-primary/20 hover:scale-105 cursor-pointer border border-primary/30"
             }`}
           >
@@ -186,10 +179,7 @@ export default function Dashboard() {
           {!isActive && (
             <p className="mt-6 text-sm text-destructive font-medium">Suscripción requerida — Contacta al administrador</p>
           )}
-
         </div>
-        
-        {/* Background Grid Pattern */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none z-10" />
       </div>
 
@@ -202,22 +192,15 @@ export default function Dashboard() {
           <div className="bg-amber-500/10 border border-amber-500/30 text-amber-400 p-4 rounded-md flex items-start gap-3">
             <Clock className="w-5 h-5 shrink-0 mt-0.5" />
             <div className="text-sm flex-1">
-              <p className="font-semibold mb-1">Cuota de Gemini agotada temporalmente</p>
+              <p className="font-semibold mb-1">Límite de API alcanzado temporalmente</p>
               <p className="text-amber-300/80 mb-3">{errorMsg}</p>
-              <div className="flex items-center gap-3">
-                <p className="text-xs text-amber-300/80">
-                  {errData?.retryAfter
-                    ? `Espera aproximadamente ${errData.retryAfter} segundos antes de volver a intentarlo.`
-                    : "Espera unos segundos antes de volver a intentarlo."}
-                </p>
-                <button
-                  onClick={handleRadarScan}
-                  disabled={radarMutation.isPending}
-                  className="flex items-center gap-2 px-4 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 rounded text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" /> Reintentar manualmente
-                </button>
-              </div>
+              <button
+                onClick={handleRadarScan}
+                disabled={radarMutation.isPending}
+                className="flex items-center gap-2 px-4 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 rounded text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Reintentar
+              </button>
             </div>
           </div>
         ) : (
@@ -240,7 +223,7 @@ export default function Dashboard() {
           </div>
 
           {radarMutation.data.length === 0 ? (
-            <p className="text-muted-foreground text-center py-12 bg-card rounded-md border border-border">No se encontraron partidos relevantes hoy.</p>
+            <p className="text-muted-foreground text-center py-12 bg-card rounded-md border border-border">No se encontraron partidos hoy en las ligas seleccionadas.</p>
           ) : (
             radarMutation.data.map((league, idx) => (
               <div key={league.league} className={`space-y-4 stagger-${(idx % 5) + 1}`}>
@@ -261,46 +244,34 @@ export default function Dashboard() {
 
 function MatchCard({ match, leagueName }: { match: Match, leagueName: string }) {
   const [expanded, setExpanded] = useState(false);
-  // Whether the user has explicitly requested to load the cached analysis
   const [loadCached, setLoadCached] = useState(false);
 
-  // For matches NOT yet analysed: use the full Gemini mutation
   const analyzeMutation = useAnalyzeMatch();
   const analyzeRequestLockedRef = useRef(false);
 
-  // For matches already analysed: lazy-load from DB (only when loadCached=true)
+  const cachedAnalysisParams = { homeTeam: match.homeTeam, awayTeam: match.awayTeam, league: leagueName };
   const cachedAnalysisQuery = useGetCachedAnalysis(
-    { homeTeam: match.homeTeam, awayTeam: match.awayTeam, league: leagueName },
+    cachedAnalysisParams,
     {
       query: {
+        queryKey: getGetCachedAnalysisQueryKey(cachedAnalysisParams),
         enabled: !!match.hasAnalysis && loadCached,
         retry: false,
-        staleTime: Infinity, // It's a cache hit — no need to refetch
+        staleTime: Infinity,
       },
     }
   );
 
-  // Unified analysis data: prefer cached query result, fall back to mutation result
   const analysis = match.hasAnalysis ? cachedAnalysisQuery.data : analyzeMutation.data;
-  const isAnalyzing = match.hasAnalysis
-    ? cachedAnalysisQuery.isFetching
-    : analyzeMutation.isPending;
+  const isAnalyzing = match.hasAnalysis ? cachedAnalysisQuery.isFetching : analyzeMutation.isPending;
+
+  // Disable analysis for finished/postponed matches that aren't yet analyzed
+  const isFinished = match.status === "finished" || match.status === "postponed";
 
   const handleAnalyze = () => {
-    // Toggle collapse if we already have data
-    if (analysis) {
-      setExpanded((curr) => !curr);
-      return;
-    }
-
-    if (match.hasAnalysis) {
-      // Cached analysis exists — just load from DB
-      setLoadCached(true);
-      setExpanded(true);
-      return;
-    }
-
-    // No cache — call Gemini
+    if (analysis) { setExpanded((curr) => !curr); return; }
+    if (match.hasAnalysis) { setLoadCached(true); setExpanded(true); return; }
+    if (isFinished) return; // can't predict a finished match
     if (analyzeMutation.isPending || analyzeRequestLockedRef.current) return;
     analyzeRequestLockedRef.current = true;
     setExpanded(true);
@@ -310,46 +281,75 @@ function MatchCard({ match, leagueName }: { match: Match, leagueName: string }) 
     );
   };
 
+  const showScore = match.score && (match.status === "live" || match.status === "halftime" || match.status === "finished");
+
   return (
     <div className="bg-card border border-border rounded-lg overflow-hidden flex flex-col transition-all duration-300 hover:border-primary/50">
-      <div className="p-4 flex items-center justify-between">
+      <div className="p-4 flex items-center justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs font-medium text-primary px-2 py-0.5 bg-primary/10 rounded-sm">
-              {match.kickoffTime
-                ? (() => { const d = new Date(match.kickoffTime); return isNaN(d.getTime()) ? match.kickoffTime : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); })()
-                : "—"}
-            </span>
-            {match.stadium && <span className="text-xs text-muted-foreground truncate">{match.stadium}</span>}
+          {/* Status + time row */}
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            {match.status === "scheduled" && (
+              <span className="text-xs font-medium text-primary px-2 py-0.5 bg-primary/10 rounded-sm">
+                {match.kickoffTime
+                  ? (() => { const d = new Date(match.kickoffTime); return isNaN(d.getTime()) ? match.kickoffTime : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); })()
+                  : "—"}
+              </span>
+            )}
+            <StatusBadge status={match.status} />
+            {match.stadium && <span className="text-xs text-muted-foreground truncate hidden sm:block">{match.stadium}</span>}
             {match.hasAnalysis && (
               <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-sm bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
                 En caché
               </span>
             )}
           </div>
-          <div className="flex flex-col mt-2">
-            <span className="text-lg font-bold text-foreground truncate">{match.homeTeam}</span>
-            <span className="text-sm text-muted-foreground">vs</span>
-            <span className="text-lg font-bold text-foreground truncate">{match.awayTeam}</span>
-          </div>
+
+          {/* Teams + score */}
+          {showScore ? (
+            <div className="flex items-center gap-3 mt-1">
+              <div className="flex-1 min-w-0">
+                <p className="text-base font-bold text-foreground truncate">{match.homeTeam}</p>
+                <p className="text-base font-bold text-foreground truncate">{match.awayTeam}</p>
+              </div>
+              <div className="flex flex-col items-center shrink-0">
+                <span className={`text-2xl font-black tabular-nums ${match.status === "live" || match.status === "halftime" ? "text-primary" : "text-foreground"}`}>
+                  {match.score!.home ?? "—"}
+                </span>
+                <span className={`text-2xl font-black tabular-nums ${match.status === "live" || match.status === "halftime" ? "text-primary" : "text-foreground"}`}>
+                  {match.score!.away ?? "—"}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col mt-1">
+              <span className="text-lg font-bold text-foreground truncate">{match.homeTeam}</span>
+              <span className="text-sm text-muted-foreground">vs</span>
+              <span className="text-lg font-bold text-foreground truncate">{match.awayTeam}</span>
+            </div>
+          )}
         </div>
-        
-        <div className="ml-4 flex flex-col items-end justify-center">
-          <button 
-            onClick={handleAnalyze}
-            disabled={isAnalyzing}
-            className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-md font-medium text-sm transition-colors border border-border"
-          >
-            {isAnalyzing ? (
-              <><Loader2 className="w-4 h-4 animate-spin text-primary" /> {match.hasAnalysis ? "Cargando..." : "Analizando"}</>
-            ) : analysis ? (
-              <><ChevronDown className={`w-4 h-4 transition-transform ${expanded ? "rotate-180" : ""}`} /> {expanded ? "Ocultar" : "Ver Análisis"}</>
-            ) : match.hasAnalysis ? (
-              <><ChevronDown className="w-4 h-4 text-emerald-400" /> Ver Análisis</>
-            ) : (
-              <><Target className="w-4 h-4 text-primary" /> Analizar</>
-            )}
-          </button>
+
+        <div className="ml-2 flex flex-col items-end justify-center shrink-0">
+          {isFinished && !match.hasAnalysis ? (
+            <span className="text-xs text-muted-foreground/50 px-3 py-2">Finalizado</span>
+          ) : (
+            <button
+              onClick={handleAnalyze}
+              disabled={isAnalyzing}
+              className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-md font-medium text-sm transition-colors border border-border disabled:opacity-50"
+            >
+              {isAnalyzing ? (
+                <><Loader2 className="w-4 h-4 animate-spin text-primary" /> {match.hasAnalysis ? "Cargando..." : "Analizando"}</>
+              ) : analysis ? (
+                <><ChevronDown className={`w-4 h-4 transition-transform ${expanded ? "rotate-180" : ""}`} /> {expanded ? "Ocultar" : "Ver Análisis"}</>
+              ) : match.hasAnalysis ? (
+                <><ChevronDown className="w-4 h-4 text-emerald-400" /> Ver Análisis</>
+              ) : (
+                <><Target className="w-4 h-4 text-primary" /> Analizar</>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
@@ -362,14 +362,13 @@ function MatchCard({ match, leagueName }: { match: Match, leagueName: string }) 
               <div className="h-4 bg-muted animate-pulse rounded w-full"></div>
             </div>
           )}
-          
+
           {analysis && !isAnalyzing && (
             <div className="space-y-6">
               <div className="flex items-start gap-2 text-sm text-muted-foreground italic bg-secondary/30 p-3 rounded-md border border-border/50">
                 <Info className="w-4 h-4 mt-0.5 shrink-0 text-primary" />
                 <p>{analysis.summary}</p>
               </div>
-
               <div className="space-y-3">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">Mercados Detectados</h4>
                 {analysis.predictions.length === 0 ? (
@@ -420,11 +419,11 @@ function PredictionRow({ prediction, match, leagueName }: { prediction: Predicti
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 animate-in fade-in" />
           <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-2rem)] max-w-md bg-card border border-border rounded-xl shadow-2xl z-50 p-4 sm:p-6 animate-in fade-in zoom-in-95 duration-200 max-h-[90dvh] overflow-y-auto">
-            <BetModalContent 
-              prediction={prediction} 
-              match={match} 
-              leagueName={leagueName} 
-              onClose={() => setModalOpen(false)} 
+            <BetModalContent
+              prediction={prediction}
+              match={match}
+              leagueName={leagueName}
+              onClose={() => setModalOpen(false)}
             />
           </Dialog.Content>
         </Dialog.Portal>
@@ -437,7 +436,7 @@ function BetModalContent({ prediction, match, leagueName, onClose }: { predictio
   const [stake, setStake] = useState<string>("10");
   const [odds, setOdds] = useState<string>(prediction.odds.toString());
   const [notes, setNotes] = useState<string>("");
-  
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const createBet = useCreateBet();
@@ -446,7 +445,6 @@ function BetModalContent({ prediction, match, leagueName, onClose }: { predictio
     e.preventDefault();
     const stakeNum = parseFloat(stake);
     const oddsNum = parseFloat(odds);
-
     if (isNaN(stakeNum) || stakeNum <= 0 || isNaN(oddsNum) || oddsNum <= 0) return;
 
     createBet.mutate({
@@ -477,7 +475,7 @@ function BetModalContent({ prediction, match, leagueName, onClose }: { predictio
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <Dialog.Title className="text-xl font-bold">Registrar Operación</Dialog.Title>
-      
+
       <div className="bg-secondary/50 p-3 rounded-md border border-border/50">
         <p className="text-sm font-medium">{match.homeTeam} vs {match.awayTeam}</p>
         <p className="text-xs text-muted-foreground">{leagueName}</p>
@@ -497,22 +495,16 @@ function BetModalContent({ prediction, match, leagueName, onClose }: { predictio
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1">
           <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Cuota</label>
-          <input 
-            type="number" 
-            step="0.01" 
-            value={odds} 
-            onChange={e => setOdds(e.target.value)}
+          <input
+            type="number" step="0.01" value={odds} onChange={e => setOdds(e.target.value)}
             className="w-full bg-background border border-border px-3 py-2 rounded text-sm text-primary font-bold focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
             required
           />
         </div>
         <div className="space-y-1">
           <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Monto (€)</label>
-          <input 
-            type="number" 
-            step="1" 
-            value={stake} 
-            onChange={e => setStake(e.target.value)}
+          <input
+            type="number" step="1" value={stake} onChange={e => setStake(e.target.value)}
             className="w-full bg-background border border-border px-3 py-2 rounded text-sm font-bold focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
             required
           />
@@ -521,11 +513,9 @@ function BetModalContent({ prediction, match, leagueName, onClose }: { predictio
 
       <div className="space-y-1">
         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Notas (Opcional)</label>
-        <input 
-          type="text" 
-          value={notes} 
-          onChange={e => setNotes(e.target.value)}
-          placeholder="Ej: Stake bajo, mercado volatil..."
+        <input
+          type="text" value={notes} onChange={e => setNotes(e.target.value)}
+          placeholder="Ej: Stake bajo, mercado volátil..."
           className="w-full bg-background border border-border px-3 py-2 rounded text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
         />
       </div>

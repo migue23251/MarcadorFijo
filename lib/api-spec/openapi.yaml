@@ -199,7 +199,7 @@ paths:
     post:
       operationId: radarMatches
       tags: [matches]
-      summary: Fetch today's matches via Gemini AI
+      summary: Fetch today's matches via API-Football
       requestBody:
         required: true
         content:
@@ -215,12 +215,12 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/LeagueMatches"
-        "400":
-          description: No Gemini key configured
         "401":
           description: Unauthorized
         "403":
           description: Subscription required
+        "502":
+          description: API-Football error
 
   /matches/cached-analysis:
     get:
@@ -511,6 +511,17 @@ components:
           items:
             $ref: "#/components/schemas/Match"
 
+    MatchScore:
+      type: object
+      required:
+        - home
+        - away
+      properties:
+        home:
+          type: ["integer", "null"]
+        away:
+          type: ["integer", "null"]
+
     Match:
       type: object
       required:
@@ -519,9 +530,13 @@ components:
         - awayTeam
         - kickoffTime
         - league
+        - status
+        - hasAnalysis
       properties:
         id:
           type: string
+        apiFootballId:
+          type: ["integer", "null"]
         homeTeam:
           type: string
         awayTeam:
@@ -532,6 +547,15 @@ components:
           type: string
         stadium:
           type: ["string", "null"]
+        status:
+          type: string
+          description: "scheduled | live | halftime | finished | postponed"
+        score:
+          oneOf:
+            - $ref: "#/components/schemas/MatchScore"
+            - type: "null"
+        hasAnalysis:
+          type: boolean
 
     AnalyzeInput:
       type: object
