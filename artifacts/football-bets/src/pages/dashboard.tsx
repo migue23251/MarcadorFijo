@@ -12,11 +12,26 @@ import {
   Match,
   Prediction
 } from "@workspace/api-client-react";
-import { Radar, AlertTriangle, ChevronDown, Check, Loader2, Target, Info } from "lucide-react";
+import { Radar, AlertTriangle, ChevronDown, Check, Loader2, Target, Info, Trophy } from "lucide-react";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import * as Dialog from "@radix-ui/react-dialog";
+
+const AVAILABLE_LEAGUES = [
+  { id: "premier_league",   label: "Premier League",    flag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿" },
+  { id: "la_liga",          label: "La Liga",            flag: "🇪🇸" },
+  { id: "bundesliga",       label: "Bundesliga",         flag: "🇩🇪" },
+  { id: "serie_a",          label: "Serie A",            flag: "🇮🇹" },
+  { id: "ligue_1",          label: "Ligue 1",            flag: "🇫🇷" },
+  { id: "champions_league", label: "Champions League",   flag: "⭐" },
+  { id: "europa_league",    label: "Europa League",      flag: "🟠" },
+  { id: "eredivisie",       label: "Eredivisie",         flag: "🇳🇱" },
+  { id: "primeira_liga",    label: "Primeira Liga",      flag: "🇵🇹" },
+  { id: "super_lig",        label: "Süper Lig",          flag: "🇹🇷" },
+  { id: "mls",              label: "MLS",                flag: "🇺🇸" },
+  { id: "liga_mx",          label: "Liga MX",            flag: "🇲🇽" },
+];
 
 function Badge({ children, variant = "default", className = "" }: { children: React.ReactNode, variant?: "default" | "success" | "warning" | "danger" | "outline", className?: string }) {
   const variants = {
@@ -41,9 +56,18 @@ export default function Dashboard() {
   const { data: keyStatus } = useGetGeminiKeyStatus({ query: { queryKey: getGetGeminiKeyStatusQueryKey() } });
 
   const radarMutation = useRadarMatches();
-  
+  const [selectedLeagues, setSelectedLeagues] = useState<string[]>([]);
+
+  const toggleLeague = (label: string) => {
+    setSelectedLeagues(prev =>
+      prev.includes(label) ? prev.filter(l => l !== label) : [...prev, label]
+    );
+  };
+
   const handleRadarScan = () => {
-    radarMutation.mutate({ data: {} });
+    radarMutation.mutate({
+      data: { leagues: selectedLeagues.length > 0 ? selectedLeagues : undefined }
+    });
   };
 
   const isActive = me?.activeSubscription;
@@ -76,8 +100,55 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* League selector */}
+      <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Trophy className="w-4 h-4 text-primary" />
+            <span className="text-sm font-semibold">Ligas a escanear</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {selectedLeagues.length > 0 && (
+              <Badge variant="default">{selectedLeagues.length} seleccionada{selectedLeagues.length !== 1 ? "s" : ""}</Badge>
+            )}
+            <button
+              onClick={() => setSelectedLeagues([])}
+              className={`text-xs transition-colors ${selectedLeagues.length > 0 ? "text-primary hover:text-primary/80 cursor-pointer" : "text-muted-foreground/40 cursor-default"}`}
+              disabled={selectedLeagues.length === 0}
+            >
+              Todas
+            </button>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {AVAILABLE_LEAGUES.map(league => {
+            const active = selectedLeagues.includes(league.label);
+            return (
+              <button
+                key={league.id}
+                onClick={() => toggleLeague(league.label)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all duration-150 ${
+                  active
+                    ? "bg-primary/20 border-primary/60 text-primary"
+                    : "bg-secondary border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                }`}
+              >
+                <span>{league.flag}</span>
+                <span>{league.label}</span>
+                {active && <Check className="w-3 h-3 ml-0.5" />}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {selectedLeagues.length === 0
+            ? "Sin selección: Gemini buscará en todas las ligas relevantes del día."
+            : `El radar buscará partidos solo en: ${selectedLeagues.join(", ")}.`}
+        </p>
+      </div>
+
       <div className="relative rounded-xl border border-border bg-card overflow-hidden">
-        <div className="p-8 flex flex-col items-center justify-center min-h-[300px] text-center relative z-20">
+        <div className="p-8 flex flex-col items-center justify-center min-h-[260px] text-center relative z-20">
           
           <button
             onClick={handleRadarScan}
