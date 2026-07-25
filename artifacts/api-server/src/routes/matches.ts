@@ -83,7 +83,10 @@ router.post(
     } catch (err) {
       if (err instanceof GeminiApiError) {
         const httpStatus = [400, 403, 404, 429].includes(err.status) ? err.status : 502;
-        res.status(httpStatus).json({ error: err.message });
+        res.status(httpStatus).json({
+          error: err.message,
+          ...(err.retryAfter !== undefined && { retryAfter: err.retryAfter }),
+        });
         return;
       }
       throw err;
@@ -121,7 +124,10 @@ router.post(
     } catch (err) {
       if (err instanceof GeminiApiError) {
         const httpStatus = [400, 403, 404, 429].includes(err.status) ? err.status : 502;
-        res.status(httpStatus).json({ error: err.message });
+        res.status(httpStatus).json({
+          error: err.message,
+          ...(err.retryAfter !== undefined && { retryAfter: err.retryAfter }),
+        });
         return;
       }
       throw err;

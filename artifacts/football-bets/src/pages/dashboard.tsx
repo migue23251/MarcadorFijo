@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { 
   useGetMe, 
   getGetMeQueryKey, 
@@ -12,7 +12,7 @@ import {
   Match,
   Prediction
 } from "@workspace/api-client-react";
-import { Radar, AlertTriangle, ChevronDown, Check, Loader2, Target, Info, Trophy } from "lucide-react";
+import { Radar, AlertTriangle, ChevronDown, Check, Loader2, Target, Info, Trophy, Clock, RefreshCw } from "lucide-react";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -61,6 +61,8 @@ export default function Dashboard() {
 
   const radarMutation = useRadarMatches();
   const [selectedLeagues, setSelectedLeagues] = useState<string[]>([]);
+  const [retryCountdown, setRetryCountdown] = useState<number | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const toggleLeague = (label: string) => {
     setSelectedLeagues(prev =>
@@ -68,11 +70,43 @@ export default function Dashboard() {
     );
   };
 
-  const handleRadarScan = () => {
+  const handleRadarScan = useCallback(() => {
+    // Clear any active countdown before firing
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    setRetryCountdown(null);
     radarMutation.mutate({
       data: { leagues: selectedLeagues.length > 0 ? selectedLeagues : undefined }
     });
-  };
+  }, [radarMutation, selectedLeagues]);
+
+  // Start countdown when a 429 error with retryAfter arrives
+  useEffect(() => {
+    const errData = (radarMutation.error as any)?.data as { error?: string; retryAfter?: number } | undefined;
+    const retryAfter = errData?.retryAfter;
+    if (!radarMutation.isError || !retryAfter) return;
+
+    setRetryCountdown(retryAfter);
+    countdownRef.current = setInterval(() => {
+      setRetryCountdown(prev => {
+        if (prev === null || prev <= 1) {
+          clearInterval(countdownRef.current!);
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => { if (countdownRef.current) clearInterval(countdownRef.current); };
+  }, [radarMutation.isError, radarMutation.error]);
+
+  // Auto-retry when countdown reaches 0
+  useEffect(() => {
+    if (retryCountdown === null && radarMutation.isError && (radarMutation.error as any)?.data?.retryAfter) {
+      // countdown just finished — fire automatically
+      handleRadarScan();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [retryCountdown]);
 
   const isActive = me?.activeSubscription;
   const hasKey = keyStatus?.hasKey;
@@ -180,15 +214,53 @@ export default function Dashboard() {
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none z-10" />
       </div>
 
-      {radarMutation.isError && (
-        <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-4 rounded-md flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
-          <div className="text-sm">
-            <p className="font-semibold mb-1">Error al desplegar el radar</p>
-            <p>{(radarMutation.error as any)?.data?.error ?? (radarMutation.error as Error)?.message ?? "Error inesperado. Inténtalo de nuevo."}</p>
+      {radarMutation.isError && (() => {
+        const errData = (radarMutation.error as any)?.data as { error?: string; retryAfter?: number } | undefined;
+        const is429 = (radarMutation.error as any)?.status === 429 || !!errData?.retryAfter;
+        const errorMsg = errData?.error ?? (radarMutation.error as Error)?.message ?? "Error inesperado. Inténtalo de nuevo.";
+
+        return is429 ? (
+          <div className="bg-amber-500/10 border border-amber-500/30 text-amber-400 p-4 rounded-md flex items-start gap-3">
+            <Clock className="w-5 h-5 shrink-0 mt-0.5" />
+            <div className="text-sm flex-1">
+              <p className="font-semibold mb-1">Cuota de Gemini agotada temporalmente</p>
+              <p className="text-amber-300/80 mb-3">{errorMsg}</p>
+              {retryCountdown !== null ? (
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded px-3 py-1.5">
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span className="font-mono font-bold text-amber-300">
+                      Reintentando en {retryCountdown}s…
+                    </span>
+                  </div>
+                  <button
+                    onClick={handleRadarScan}
+                    className="text-xs underline text-amber-400 hover:text-amber-300 transition-colors"
+                  >
+                    Reintentar ahora
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={handleRadarScan}
+                  disabled={radarMutation.isPending}
+                  className="flex items-center gap-2 px-4 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 rounded text-xs font-semibold transition-colors"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" /> Reintentar
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-4 rounded-md flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-semibold mb-1">Error al desplegar el radar</p>
+              <p>{errorMsg}</p>
+            </div>
+          </div>
+        );
+      })()}
 
       {radarMutation.isSuccess && radarMutation.data && (
         <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-700">

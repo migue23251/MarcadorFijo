@@ -5,11 +5,6 @@ import { eq, and } from "drizzle-orm";
 const GEMINI_API_BASE =
   "https://generativelanguage.googleapis.com/v1beta/models";
 
-/** Maximum number of automatic retries on a 429 rate-limit response. */
-const MAX_RETRIES = 3;
-/** Default wait (ms) between retries when Gemini doesn't tell us how long. */
-const DEFAULT_RETRY_MS = 10_000;
-
 interface GeminiMatch {
   league: string;
   homeTeam: string;
@@ -39,19 +34,18 @@ export class GeminiApiError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    /** Seconds the caller should wait before retrying (from Gemini's Retry-After) */
+    public readonly retryAfter?: number,
   ) {
     super(message);
     this.name = "GeminiApiError";
   }
 }
 
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-
 async function callGemini(
   apiKey: string,
   model: string,
   prompt: string,
-  attempt = 0,
 ): Promise<string> {
   const url = `${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`;
   const response = await fetch(url, {
@@ -68,33 +62,18 @@ async function callGemini(
   });
 
   if (!response.ok) {
-    const body = await response.json().catch(() => null);
+    const body = await response.json().catch(() => null) as any;
     const geminiMessage: string = body?.error?.message ?? "";
 
-    logger.error({ status: response.status, geminiMessage, model, attempt }, "Gemini API error");
-
-    // --- Exponential backoff on rate-limit (429) ---
-    if (response.status === 429 && attempt < MAX_RETRIES) {
-      const retryMatch = geminiMessage.match(/retry in ([\d.]+)s/i);
-      const waitMs = retryMatch
-        ? Math.ceil(parseFloat(retryMatch[1])) * 1000 + 1_000 // add 1s buffer
-        : DEFAULT_RETRY_MS * Math.pow(2, attempt); // 10s → 20s → 40s
-
-      logger.warn(
-        { attempt, waitMs, model },
-        `Gemini rate limit hit — retrying in ${waitMs / 1000}s (attempt ${attempt + 1}/${MAX_RETRIES})`,
-      );
-      await sleep(waitMs);
-      return callGemini(apiKey, model, prompt, attempt + 1);
-    }
+    logger.error({ status: response.status, geminiMessage, model }, "Gemini API error");
 
     let userMessage: string;
+    let retryAfter: number | undefined;
+
     if (response.status === 429) {
       const retryMatch = geminiMessage.match(/retry in ([\d.]+)s/i);
-      const retrySecs = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : null;
-      userMessage = retrySecs
-        ? `Cuota de Gemini agotada para el modelo "${model}". Intenta de nuevo en ${retrySecs} segundos.`
-        : `Cuota de Gemini agotada para el modelo "${model}". Revisa tu plan en https://ai.dev/rate-limit`;
+      retryAfter = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) + 2 : 60;
+      userMessage = `Cuota de Gemini agotada para el modelo "${model}". Intenta de nuevo en ${retryAfter} segundos.`;
     } else if (response.status === 404) {
       userMessage = `El modelo "${model}" no existe o no está disponible con tu API Key. Selecciona otro modelo en Configuración.`;
     } else if (response.status === 400) {
@@ -105,10 +84,10 @@ async function callGemini(
     } else {
       userMessage = `Error de Gemini (${response.status})${geminiMessage ? `: ${geminiMessage.slice(0, 200)}` : ""}`;
     }
-    throw new GeminiApiError(response.status, userMessage);
+    throw new GeminiApiError(response.status, userMessage, retryAfter);
   }
 
-  const data = await response.json();
+  const data = await response.json() as any;
   const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
   return text;
 }
