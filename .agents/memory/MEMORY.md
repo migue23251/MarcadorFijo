@@ -1,0 +1,1 @@
+- [Imported Clerk setup](clerk-import-setup.md) — preserve external auth credentials and keep public pages usable when auth setup is deferred.

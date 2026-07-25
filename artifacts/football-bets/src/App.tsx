@@ -24,15 +24,15 @@ const clerkPubKey = publishableKeyFromHost(
 
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+const rawClerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+const hasUsableClerkKey =
+  typeof rawClerkPubKey === "string" &&
+  /^pk_(test|live)_[A-Za-z0-9_-]+$/.test(rawClerkPubKey);
 
 function stripBase(path: string): string {
   return basePath && path.startsWith(basePath)
     ? path.slice(basePath.length) || "/"
     : path;
-}
-
-if (!clerkPubKey) {
-  throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY in .env file');
 }
 
 const clerkAppearance = {
@@ -206,6 +206,14 @@ function ClerkProviderWithRoutes() {
 }
 
 function App() {
+  if (!hasUsableClerkKey) {
+    return (
+      <WouterRouter base={basePath}>
+        <Home />
+      </WouterRouter>
+    );
+  }
+
   return (
     <WouterRouter base={basePath}>
       <ClerkProviderWithRoutes />

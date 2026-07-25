@@ -52,11 +52,12 @@ A full-stack football betting management and prediction app powered by Gemini AI
 
 ## Setup status
 
-Project is fully set up and running on Replit:
-- Dependencies installed via `pnpm install --recursive`
-- Clerk auth provisioned (Replit-managed) — keys auto-set in secrets
-- PostgreSQL database connected and schema pushed via `pnpm --filter @workspace/db run push`
-- All three workflows running: frontend (port 22535), API server (port 8080), mockup sandbox
+Project is set up to run on Replit:
+- Dependencies installed from the checked-in lockfile via `pnpm install --recursive --frozen-lockfile`
+- Managed workflows configured for the frontend, API server, and mockup sandbox
+- PostgreSQL `DATABASE_URL` and `SESSION_SECRET` are available in the environment
+- Clerk authentication is intentionally deferred until valid matching external Clerk keys are configured
+- The public landing page remains available while Clerk is not configured; authenticated routes require Clerk keys
 
 ## User preferences
 
