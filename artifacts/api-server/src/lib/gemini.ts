@@ -159,35 +159,70 @@ export async function analyzeMatch(
   league: string,
   kickoffTime: string,
 ): Promise<GeminiAnalysis> {
-  const basePrompt = `You are an expert football analyst and betting advisor. Analyze the following match and provide detailed betting predictions.
+  const prompt = `Actúa como un analista cuantitativo de apuestas deportivas profesional y tipster cuantitativo. Tu objetivo es realizar un análisis probabilístico y estadístico exhaustivo para el siguiente partido de fútbol y determinar si existen apuestas de valor (Value Bets).
 
-Match: ${homeTeam} vs ${awayTeam}
-League: ${league}
-Kickoff: ${kickoffTime}
+### DATOS DEL PARTIDO A ANALIZAR:
+- Torneo / Liga: ${league}
+- Partido: ${homeTeam} vs. ${awayTeam}
+- Fecha y Hora: ${kickoffTime}
 
-Return a valid JSON object with this exact structure:
+---
+
+### METODOLOGÍA DE ANÁLISIS:
+
+Por favor, busca, recopila y procesa la siguiente información actualizada de ambos equipos:
+
+1. ESTADO ACTUAL Y TABLA:
+   - Posición actual en la tabla, puntos y diferencia de gol de ambos equipos.
+   - Tendencia en las últimas 5 a 8 jornadas (Racha: victorias, empates, derrotas).
+   - Rendimiento relativo: Localía para el ${homeTeam} vs. Rendimiento como visitante para el ${awayTeam}.
+
+2. ESTADÍSTICAS DE GOLES Y JUEGO:
+   - Promedio de goles anotados y concedidos por partido (general, local y visitante).
+   - Métricas avanzadas si están disponibles (xG / Goles Esperados a favor y en contra).
+   - Porcentaje de partidos con Más/Menos de 2.5 goles y "Ambos Equipos Anotan".
+
+3. DISCIPLINA (TARJETAS):
+   - Promedio de tarjetas amarillas y rojas por partido para cada equipo.
+   - Perfil del árbitro asignado (si se conoce) o promedio de tarjetas mostradas por el equipo en partidos de alta intensidad.
+   - Jugadores clave apercibidos o sancionados por acumulación de tarjetas.
+
+4. PLANTILLA, BAJAS Y JUGADORES CLAVE:
+   - Lesionados, suspendidos o dudas confirmadas de última hora.
+   - Top goleadores y asistentes de cada equipo, evaluando su disponibilidad para el partido.
+
+5. HISTORIAL DIRECTO (HEAD TO HEAD - H2H):
+   - Últimos 5 enfrentamientos directos entre ambos equipos.
+   - Patrones recurrentes en esos duelos (goles, tarjetas, dominancia).
+
+6. MONITOREO DE CUOTAS Y MERCADO:
+   - Revisa las cuotas ofrecidas por al menos 3 casas de apuestas principales (ej. Bet365, Betfair, Pinnacle, Codere, 1xBet).
+   - Analiza la evolución de la cuota: ¿Ha habido caídas o subidas drásticas en la cuota del local, visitante o empates?
+
+---
+
+### FORMATO DE SALIDA:
+
+Devuelve un objeto JSON válido con esta estructura exacta. El campo "summary" debe contener el resumen ejecutivo del partido (contexto, forma y factores determinantes, máximo 150 palabras). Las "predictions" deben ser las apuestas de valor identificadas, ordenadas de mayor a menor confianza.
+
 {
   "homeTeam": "${homeTeam}",
   "awayTeam": "${awayTeam}",
   "league": "${league}",
-  "summary": "A 2-3 sentence match overview covering recent form, head-to-head, key players, and likely outcome",
+  "summary": "Resumen ejecutivo: contexto del partido, momento de forma y factores determinantes (bajas clave, cansancio, etc.)",
   "predictions": [
     {
-      "id": "unique-id",
-      "market": "Market name (e.g. 1X2, Both Teams to Score, Over/Under 2.5, etc.)",
-      "selection": "The specific selection (e.g. Home Win, Yes, Over 2.5, etc.)",
+      "id": "value-bet-1",
+      "market": "Nombre del mercado (ej: 1X2, Más/Menos 2.5 goles, Ambos Anotan, Tarjetas)",
+      "selection": "Selección específica (ej: Victoria Local, Más de 2.5, Sí, Más de 3.5 tarjetas)",
       "odds": 1.85,
       "confidence": "high|medium|low",
-      "reasoning": "Brief reasoning for this prediction"
+      "reasoning": "Argumentación técnica: por qué la cuota representa valor real respecto a la probabilidad estadística estimada"
     }
   ]
 }
 
-Provide 4-6 diverse predictions covering different markets. Return ONLY the JSON object.`;
-
-  const prompt = SYSTEM_ANALYSIS_PROMPT
-    ? `${SYSTEM_ANALYSIS_PROMPT}\n\n${basePrompt}`
-    : basePrompt;
+Proporciona entre 4 y 6 value bets cubriendo distintos mercados (resultado, goles, tarjetas, córners). Devuelve ÚNICAMENTE el objeto JSON, sin markdown ni texto adicional.`;
 
   const raw = await callGemini(apiKey, prompt);
 
