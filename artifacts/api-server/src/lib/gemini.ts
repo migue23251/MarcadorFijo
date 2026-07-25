@@ -1,7 +1,14 @@
 import { logger } from "./logger";
+import { db, radarCacheTable, analysisCacheTable } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
 
 const GEMINI_API_BASE =
   "https://generativelanguage.googleapis.com/v1beta/models";
+
+/** Maximum number of automatic retries on a 429 rate-limit response. */
+const MAX_RETRIES = 3;
+/** Default wait (ms) between retries when Gemini doesn't tell us how long. */
+const DEFAULT_RETRY_MS = 10_000;
 
 interface GeminiMatch {
   league: string;
@@ -38,7 +45,14 @@ export class GeminiApiError extends Error {
   }
 }
 
-async function callGemini(apiKey: string, model: string, prompt: string): Promise<string> {
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+async function callGemini(
+  apiKey: string,
+  model: string,
+  prompt: string,
+  attempt = 0,
+): Promise<string> {
   const url = `${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`;
   const response = await fetch(url, {
     method: "POST",
@@ -57,7 +71,22 @@ async function callGemini(apiKey: string, model: string, prompt: string): Promis
     const body = await response.json().catch(() => null);
     const geminiMessage: string = body?.error?.message ?? "";
 
-    logger.error({ status: response.status, geminiMessage, model }, "Gemini API error");
+    logger.error({ status: response.status, geminiMessage, model, attempt }, "Gemini API error");
+
+    // --- Exponential backoff on rate-limit (429) ---
+    if (response.status === 429 && attempt < MAX_RETRIES) {
+      const retryMatch = geminiMessage.match(/retry in ([\d.]+)s/i);
+      const waitMs = retryMatch
+        ? Math.ceil(parseFloat(retryMatch[1])) * 1000 + 1_000 // add 1s buffer
+        : DEFAULT_RETRY_MS * Math.pow(2, attempt); // 10s → 20s → 40s
+
+      logger.warn(
+        { attempt, waitMs, model },
+        `Gemini rate limit hit — retrying in ${waitMs / 1000}s (attempt ${attempt + 1}/${MAX_RETRIES})`,
+      );
+      await sleep(waitMs);
+      return callGemini(apiKey, model, prompt, attempt + 1);
+    }
 
     let userMessage: string;
     if (response.status === 429) {
@@ -71,7 +100,8 @@ async function callGemini(apiKey: string, model: string, prompt: string): Promis
     } else if (response.status === 400) {
       userMessage = `Error 400: ${geminiMessage || "API Key de Gemini inválida. Verifica la clave en Configuración."}`;
     } else if (response.status === 403) {
-      userMessage = "API Key de Gemini sin permisos. Verifica que la clave tenga acceso a la API.";
+      userMessage =
+        "API Key de Gemini sin permisos. Verifica que la clave tenga acceso a la API.";
     } else {
       userMessage = `Error de Gemini (${response.status})${geminiMessage ? `: ${geminiMessage.slice(0, 200)}` : ""}`;
     }
@@ -83,19 +113,58 @@ async function callGemini(apiKey: string, model: string, prompt: string): Promis
   return text;
 }
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function todayUTC(): string {
+  return new Date().toISOString().split("T")[0];
+}
+
+function buildLeaguesKey(leagues?: string[]): string {
+  if (!leagues || leagues.length === 0) return "";
+  return [...leagues]
+    .map((l) => l.toLowerCase().trim())
+    .sort()
+    .join("|");
+}
+
+// ---------------------------------------------------------------------------
+// Radar
+// ---------------------------------------------------------------------------
+
 export async function getRadarMatches(
   apiKey: string,
   model: string,
   leagues?: string[],
 ): Promise<{ league: string; matches: GeminiMatch[] }[]> {
+  const date = todayUTC();
+  const leaguesKey = buildLeaguesKey(leagues);
+
+  // --- Cache lookup (shared across all users) ---
+  const cached = await db
+    .select()
+    .from(radarCacheTable)
+    .where(
+      and(
+        eq(radarCacheTable.date, date),
+        eq(radarCacheTable.leaguesKey, leaguesKey),
+      ),
+    )
+    .limit(1);
+
+  if (cached.length > 0) {
+    logger.info({ date, leaguesKey }, "Radar cache hit — skipping Gemini call");
+    return JSON.parse(cached[0].result);
+  }
+
+  // --- Cache miss: call Gemini ---
   const leagueList =
     leagues && leagues.length > 0
       ? leagues.join(", ")
       : "Premier League, La Liga, Serie A, Bundesliga, Ligue 1, Champions League, Europa League, MLS";
 
-  const today = new Date().toISOString().split("T")[0];
-
-  const prompt = `You are a football data assistant. Return today's (${today}) scheduled football matches from these leagues: ${leagueList}.
+  const prompt = `You are a football data assistant. Return today's (${date}) scheduled football matches from these leagues: ${leagueList}.
 
 Return a valid JSON array with this exact structure:
 [
@@ -139,7 +208,6 @@ Rules:
   const sorted = Array.from(grouped.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([league, leagueMatches]) => {
-      // Sort by kickoff time
       const sortedMatches = leagueMatches.sort((a, b) =>
         (a.kickoffTime ?? "").localeCompare(b.kickoffTime ?? ""),
       );
@@ -147,13 +215,31 @@ Rules:
         league,
         matches: sortedMatches.map((m, i) => ({
           ...m,
-          id: `${league}-${m.homeTeam}-${m.awayTeam}-${i}`.replace(/\s+/g, "-").toLowerCase(),
+          id: `${league}-${m.homeTeam}-${m.awayTeam}-${i}`
+            .replace(/\s+/g, "-")
+            .toLowerCase(),
         })),
       };
     });
 
+  // --- Save to cache (best-effort, don't fail the request) ---
+  try {
+    await db.insert(radarCacheTable).values({
+      date,
+      leaguesKey,
+      result: JSON.stringify(sorted),
+    });
+    logger.info({ date, leaguesKey }, "Radar result cached in DB");
+  } catch (err) {
+    logger.warn({ err }, "Failed to save radar result to cache");
+  }
+
   return sorted;
 }
+
+// ---------------------------------------------------------------------------
+// Analysis
+// ---------------------------------------------------------------------------
 
 export async function analyzeMatch(
   apiKey: string,
@@ -163,6 +249,28 @@ export async function analyzeMatch(
   league: string,
   kickoffTime: string,
 ): Promise<GeminiAnalysis> {
+  const date = todayUTC();
+
+  // --- Cache lookup (shared across all users) ---
+  const cached = await db
+    .select()
+    .from(analysisCacheTable)
+    .where(
+      and(
+        eq(analysisCacheTable.date, date),
+        eq(analysisCacheTable.league, league),
+        eq(analysisCacheTable.homeTeam, homeTeam),
+        eq(analysisCacheTable.awayTeam, awayTeam),
+      ),
+    )
+    .limit(1);
+
+  if (cached.length > 0) {
+    logger.info({ homeTeam, awayTeam, league, date }, "Analysis cache hit — skipping Gemini call");
+    return JSON.parse(cached[0].result);
+  }
+
+  // --- Cache miss: call Gemini ---
   const prompt = `Actúa como un analista cuantitativo de apuestas deportivas profesional y tipster cuantitativo. Tu objetivo es realizar un análisis probabilístico y estadístico exhaustivo para el siguiente partido de fútbol y determinar si existen apuestas de valor (Value Bets).
 
 ### DATOS DEL PARTIDO A ANALIZAR:
@@ -233,7 +341,6 @@ Proporciona entre 4 y 6 value bets cubriendo distintos mercados (resultado, gole
   let analysis: GeminiAnalysis;
   try {
     analysis = JSON.parse(raw);
-    // Ensure IDs are unique
     analysis.predictions = analysis.predictions.map((p, i) => ({
       ...p,
       id: p.id || `pred-${i}`,
@@ -248,6 +355,20 @@ Proporciona entre 4 y 6 value bets cubriendo distintos mercados (resultado, gole
       summary: "No se pudo obtener el análisis. Por favor, inténtalo de nuevo.",
       predictions: [],
     };
+  }
+
+  // --- Save to cache (best-effort) ---
+  try {
+    await db.insert(analysisCacheTable).values({
+      date,
+      homeTeam,
+      awayTeam,
+      league,
+      result: JSON.stringify(analysis),
+    });
+    logger.info({ homeTeam, awayTeam, league, date }, "Analysis result cached in DB");
+  } catch (err) {
+    logger.warn({ err }, "Failed to save analysis result to cache");
   }
 
   return analysis;
