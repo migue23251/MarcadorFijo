@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { ClerkProvider, SignIn, SignUp, Show, useClerk } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
-import { Switch, Route, useLocation, Router as WouterRouter, Redirect } from 'wouter';
+import { Switch, Route, Link, useLocation, Router as WouterRouter, Redirect } from 'wouter';
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -96,6 +96,37 @@ function SignUpPage() {
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
       <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} />
+    </div>
+  );
+}
+
+function AuthUnavailablePage({ mode }: { mode: "sign-in" | "sign-up" }) {
+  const isSignUp = mode === "sign-up";
+
+  return (
+    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4 text-foreground">
+      <div className="w-full max-w-md rounded-xl border border-border bg-card p-8 text-center shadow-2xl">
+        <img
+          src={`${basePath}/logo.svg`}
+          alt="RadarBet"
+          className="mx-auto mb-5 h-12 w-12"
+        />
+        <h1 className="text-2xl font-bold">
+          {isSignUp ? "Registro temporalmente no disponible" : "Acceso temporalmente no disponible"}
+        </h1>
+        <p className="mt-3 text-sm leading-6 text-muted-foreground">
+          La autenticación de RadarBet todavía no está configurada en este entorno.
+          {isSignUp
+            ? " El registro se habilitará cuando se configure una clave válida de Clerk."
+            : " El acceso se habilitará cuando se configure una clave válida de Clerk."}
+        </p>
+        <Link
+          href="/"
+          className="mt-6 inline-flex rounded-md bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+        >
+          Volver al inicio
+        </Link>
+      </div>
     </div>
   );
 }
@@ -209,7 +240,12 @@ function App() {
   if (!hasUsableClerkKey) {
     return (
       <WouterRouter base={basePath}>
-        <Home />
+        <Switch>
+          <Route path="/" component={Home} />
+          <Route path="/sign-in/*?" component={() => <AuthUnavailablePage mode="sign-in" />} />
+          <Route path="/sign-up/*?" component={() => <AuthUnavailablePage mode="sign-up" />} />
+          <Route component={Home} />
+        </Switch>
       </WouterRouter>
     );
   }
