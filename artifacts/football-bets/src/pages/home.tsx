@@ -50,7 +50,7 @@ const STEPS = [
     icon: BrainCircuit,
     step: "02",
     title: "Analiza con IA",
-    desc: "LLaMA 3.3 70B cruza cada variable y calcula el valor esperado real de cada mercado. Sin narrativas, solo señal cuantitativa y razonamiento explícito.",
+    desc: "Nuestro motor de IA cruza cada variable y calcula el valor esperado real de cada mercado. Sin narrativas, solo señal cuantitativa y razonamiento explícito.",
   },
   {
     icon: Wallet,
