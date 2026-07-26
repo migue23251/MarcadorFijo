@@ -444,11 +444,11 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 animate-in fade-in slide-in-from-bottom-6 duration-700 delay-100">
+            <div className="flex gap-5 overflow-x-auto pb-2 snap-x snap-mandatory lg:grid lg:grid-cols-4 lg:overflow-visible lg:pb-0 animate-in fade-in slide-in-from-bottom-6 duration-700 delay-100">
               {PLANS.map(({ id, label, price, period, perMonth, savings, popular, features }, i) => (
                 <div
                   key={id}
-                  className={`relative flex flex-col rounded-xl border p-6 transition-all duration-300 ${
+                  className={`relative flex flex-col rounded-xl border p-6 transition-all duration-300 flex-shrink-0 w-[72vw] sm:w-[45vw] lg:w-auto snap-start ${
                     popular
                       ? "border-primary bg-primary/5 shadow-lg shadow-primary/10"
                       : "border-border bg-card hover:border-primary/50"
