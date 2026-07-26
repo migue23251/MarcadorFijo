@@ -122,6 +122,8 @@ export async function listAvailableModels(apiKey: string): Promise<GeminiModelIn
     const models: GeminiModelInfo[] = [];
     const pager = await ai.models.list();
     for await (const model of pager) {
+      const name: string = model.name ?? "";
+
       // Only keep models that support generateContent
       const actions: string[] = (model as any).supportedActions ?? [];
       if (!actions.includes("generateContent")) continue;
@@ -135,8 +137,6 @@ export async function listAvailableModels(apiKey: string): Promise<GeminiModelIn
         nameLower.includes("robotics") ||
         nameLower.includes("antigravity")
       ) continue;
-
-      const name: string = model.name ?? "";
       // Strip the "models/" prefix to get a clean id like "gemini-2.0-flash"
       const id = name.startsWith("models/") ? name.slice("models/".length) : name;
       if (!id) continue;
