@@ -93,6 +93,26 @@ router.post(
       const { homeTeam, awayTeam, league, kickoffTime } = parsed.data;
       const date = new Date().toISOString().split("T")[0];
 
+      // --- Early cache check: skip ALL external calls if analysis exists ---
+      const existingAnalysis = await db
+        .select()
+        .from(analysisCacheTable)
+        .where(
+          and(
+            eq(analysisCacheTable.date, date),
+            eq(analysisCacheTable.homeTeam, homeTeam),
+            eq(analysisCacheTable.awayTeam, awayTeam),
+            eq(analysisCacheTable.league, league),
+          ),
+        )
+        .limit(1);
+
+      if (existingAnalysis.length > 0) {
+        logger.info({ homeTeam, awayTeam, league }, "Analysis cache hit in route — skipping enrichment");
+        res.json(JSON.parse(existingAnalysis[0].result));
+        return;
+      }
+
       // --- Look up fixture metadata from radar cache for enrichment ---
       let fixtureId: number | undefined;
       let homeTeamId: number | undefined;

@@ -362,13 +362,17 @@ async function fetchH2H(
   awayTeamId: number,
   date: string,
 ): Promise<H2HRecord[] | null> {
+  // Normalize key order so A-vs-B and B-vs-A share the same cache row
+  const keyA = Math.min(homeTeamId, awayTeamId);
+  const keyB = Math.max(homeTeamId, awayTeamId);
+
   const cached = await db
     .select()
     .from(h2hCacheTable)
     .where(
       and(
-        eq(h2hCacheTable.homeTeamId, homeTeamId),
-        eq(h2hCacheTable.awayTeamId, awayTeamId),
+        eq(h2hCacheTable.homeTeamId, keyA),
+        eq(h2hCacheTable.awayTeamId, keyB),
         eq(h2hCacheTable.date, date),
       ),
     )
@@ -415,9 +419,9 @@ async function fetchH2H(
   try {
     await db
       .insert(h2hCacheTable)
-      .values({ homeTeamId, awayTeamId, date, result: JSON.stringify(h2h) })
+      .values({ homeTeamId: keyA, awayTeamId: keyB, date, result: JSON.stringify(h2h) })
       .onConflictDoNothing();
-    logger.info({ homeTeamId, awayTeamId, count: h2h.length }, "H2H cached in DB");
+    logger.info({ keyA, keyB, count: h2h.length }, "H2H cached in DB");
   } catch (err) {
     logger.warn({ err }, "Failed to cache H2H");
   }
