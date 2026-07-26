@@ -4,10 +4,6 @@ import { and, eq } from "drizzle-orm";
 
 const ODDS_API_BASE = "https://api.the-odds-api.com/v4";
 
-/**
- * Map our league display names to The Odds API sport keys.
- * Only leagues supported by The Odds API are listed — others fall back to no odds.
- */
 const LEAGUE_TO_SPORT_KEY: Record<string, string> = {
   "Premier League":       "soccer_epl",
   "La Liga":              "soccer_spain_la_liga",
@@ -48,7 +44,6 @@ interface OddsEvent {
   }>;
 }
 
-/** Normalize a team name for fuzzy matching (lowercase, strip accents, remove FC/CF etc.) */
 function normalizeTeam(name: string): string {
   return name
     .toLowerCase()
@@ -67,10 +62,6 @@ function teamsMatch(a: string, b: string): boolean {
   return na === nb || na.includes(nb) || nb.includes(na);
 }
 
-/**
- * Fetch and cache all odds for a sport by day.
- * Returns null if the API key is missing or the request fails.
- */
 async function fetchSportOdds(sportKey: string, date: string): Promise<OddsEvent[] | null> {
   const apiKey = process.env["THE_ODDS_API_KEY"];
   if (!apiKey) {
@@ -78,7 +69,7 @@ async function fetchSportOdds(sportKey: string, date: string): Promise<OddsEvent
     return null;
   }
 
-  // Check DB cache first
+  // Cache check
   const cached = await db
     .select()
     .from(oddsCacheTable)
@@ -90,11 +81,10 @@ async function fetchSportOdds(sportKey: string, date: string): Promise<OddsEvent
     return JSON.parse(cached[0].result) as OddsEvent[];
   }
 
-  // Fetch from The Odds API
   const url = new URL(`${ODDS_API_BASE}/sports/${sportKey}/odds`);
   url.searchParams.set("apiKey", apiKey);
   url.searchParams.set("regions", "eu");
-  url.searchParams.set("markets", "h2h,totals");
+  url.searchParams.set("markets", "h2h,totals,btts");
   url.searchParams.set("oddsFormat", "decimal");
 
   logger.info({ sportKey }, "Fetching odds from The Odds API");
@@ -108,19 +98,18 @@ async function fetchSportOdds(sportKey: string, date: string): Promise<OddsEvent
   }
 
   if (!res.ok) {
-    logger.warn({ sportKey, status: res.status, statusText: res.statusText }, "Odds API non-OK response");
+    logger.warn({ sportKey, status: res.status }, "Odds API non-OK response");
     return null;
   }
 
   const events: OddsEvent[] = await res.json();
 
-  // Cache the result (best-effort)
+  // Cache — use onConflictDoNothing so concurrent requests don't collide
   try {
-    await db.insert(oddsCacheTable).values({
-      date,
-      sportKey,
-      result: JSON.stringify(events),
-    });
+    await db
+      .insert(oddsCacheTable)
+      .values({ date, sportKey, result: JSON.stringify(events) })
+      .onConflictDoNothing();
     logger.info({ sportKey, date, eventCount: events.length }, "Odds cached in DB");
   } catch (err) {
     logger.warn({ err }, "Failed to save odds to DB cache");
@@ -129,10 +118,6 @@ async function fetchSportOdds(sportKey: string, date: string): Promise<OddsEvent
   return events;
 }
 
-/**
- * Returns a simplified odds object for a specific match, ready to be passed to the AI prompt.
- * Returns null if no odds are available (missing key, unsupported league, match not found).
- */
 export async function getMatchOdds(
   homeTeam: string,
   awayTeam: string,
@@ -148,13 +133,12 @@ export async function getMatchOdds(
   const events = await fetchSportOdds(sportKey, date);
   if (!events || events.length === 0) return null;
 
-  // Find the matching event using fuzzy team name comparison
   const event = events.find(
     (e) => teamsMatch(e.home_team, homeTeam) && teamsMatch(e.away_team, awayTeam),
   );
 
   if (!event) {
-    logger.info({ homeTeam, awayTeam, sportKey }, "Match not found in odds data — proceeding without odds");
+    logger.info({ homeTeam, awayTeam, sportKey }, "Match not found in odds data");
     return null;
   }
 

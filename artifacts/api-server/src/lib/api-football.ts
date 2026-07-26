@@ -1,12 +1,17 @@
 import { logger } from "./logger";
-import { db, radarCacheTable, analysisCacheTable } from "@workspace/db";
+import {
+  db,
+  radarCacheTable,
+  analysisCacheTable,
+  teamStatsCacheTable,
+  injuriesCacheTable,
+  h2hCacheTable,
+} from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 
 /** How long (ms) to keep a cached result that contained live matches before refreshing. */
 const LIVE_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
 
-// Direct API-Sports endpoint — supports both x-apisports-key and x-rapidapi-* headers.
-// No trailing slash; append paths directly (e.g. `${API_FOOTBALL_BASE}/fixtures`).
 const API_FOOTBALL_BASE = "https://v3.football.api-sports.io";
 const API_FOOTBALL_HOST = "v3.football.api-sports.io";
 
@@ -14,11 +19,10 @@ const API_FOOTBALL_HOST = "v3.football.api-sports.io";
 const ALL_FIXTURES_CACHE_KEY = "af_all";
 
 // ---------------------------------------------------------------------------
-// League configuration — maps our display names to API-Football league IDs
+// League configuration
 // ---------------------------------------------------------------------------
 
 const LEAGUE_ID_BY_NAME: Record<string, number> = {
-  // ── Ligas domésticas ──────────────────────────────────────────────────────
   "Premier League": 39,
   "La Liga": 140,
   "Serie A": 135,
@@ -33,7 +37,6 @@ const LEAGUE_ID_BY_NAME: Record<string, number> = {
   "Liga Profesional": 128,
   Brasileirão: 71,
   "LigaPro Ecuador": 334,
-  // ── Copas nacionales ─────────────────────────────────────────────────────
   "FA Cup": 45,
   "Copa del Rey": 143,
   "Coppa Italia": 137,
@@ -43,17 +46,14 @@ const LEAGUE_ID_BY_NAME: Record<string, number> = {
   "Copa do Brasil": 73,
   "Copa Argentina": 130,
   "Copa BetPlay": 240,
-  // ── Copas internacionales / continentales ─────────────────────────────────
   "Champions League": 2,
   "Europa League": 3,
   "Conference League": 848,
   "Copa Libertadores": 13,
   "Copa Sudamericana": 11,
-  // ── Selecciones ───────────────────────────────────────────────────────────
   "Copa Mundial FIFA": 1,
 };
 
-/** Reverse map: API-Football league ID → our display name */
 const LEAGUE_NAME_BY_ID: Record<number, string> = Object.fromEntries(
   Object.entries(LEAGUE_ID_BY_NAME).map(([name, id]) => [id, name]),
 );
@@ -67,15 +67,57 @@ export const DEFAULT_LEAGUES = Object.keys(LEAGUE_ID_BY_NAME);
 export interface ApiFootballMatch {
   id: string;
   apiFootballId: number;
+  homeTeamId: number;
+  awayTeamId: number;
+  leagueId: number;
   league: string;
   homeTeam: string;
   awayTeam: string;
   kickoffTime: string;
   stadium: string | null;
-  /** "scheduled" | "live" | "halftime" | "finished" | "postponed" */
   status: string;
   score: { home: number | null; away: number | null } | null;
   hasAnalysis: boolean;
+}
+
+export interface TeamStats {
+  teamName: string;
+  season: number;
+  form: string;
+  played: { home: number; away: number; total: number };
+  wins: { home: number; away: number; total: number };
+  draws: { home: number; away: number; total: number };
+  losses: { home: number; away: number; total: number };
+  /** Average goals per game */
+  goalsFor: { home: string; away: string; total: string };
+  goalsAgainst: { home: string; away: string; total: string };
+  cleanSheets: { home: number; away: number; total: number };
+  failedToScore: { home: number; away: number; total: number };
+  yellowCards: number;
+  redCards: number;
+}
+
+export interface InjuryRecord {
+  player: string;
+  team: string;
+  type: string;
+  reason: string;
+}
+
+export interface H2HRecord {
+  date: string;
+  homeTeam: string;
+  awayTeam: string;
+  scoreHome: number | null;
+  scoreAway: number | null;
+  winner: "home" | "away" | "draw";
+}
+
+export interface MatchEnrichment {
+  homeStats: TeamStats | null;
+  awayStats: TeamStats | null;
+  injuries: InjuryRecord[] | null;
+  h2h: H2HRecord[] | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -84,37 +126,27 @@ export interface ApiFootballMatch {
 
 function mapStatus(short: string): string {
   switch (short) {
-    // Not started
     case "NS":
-    case "TBD": // Time To Be Defined — date set but kickoff time not yet confirmed
+    case "TBD":
       return "scheduled";
-    // In play
     case "1H":
     case "2H":
-    case "ET":  // Extra Time
-    case "BT":  // Break Time (between ET halves)
-    case "P":   // Penalty shootout
+    case "ET":
+    case "BT":
+    case "P":
     case "LIVE":
       return "live";
-    // Halftime
     case "HT":
       return "halftime";
-    // Finished
     case "FT":
-    case "AET": // After Extra Time
-    case "PEN": // After Penalties
-    case "AWD": // Technical Loss (result awarded)
-    case "WO":  // WalkOver
+    case "AET":
+    case "PEN":
+    case "AWD":
+    case "WO":
       return "finished";
-    // Cancelled / abandoned — show separately from postponed
     case "CANC":
-    case "ABD": // Abandoned mid-match
+    case "ABD":
       return "cancelled";
-    // Postponed / interrupted
-    case "PST":  // Postponed
-    case "SUSP": // Suspended (will resume)
-    case "INT":  // Interrupted (temporarily stopped)
-      return "postponed";
     default:
       return "postponed";
   }
@@ -129,12 +161,14 @@ function parseFixture(
   const goals = fixture.goals;
   const statusShort: string = f?.status?.short ?? "NS";
   const status = mapStatus(statusShort);
-
   const hasScore = goals?.home !== null || goals?.away !== null;
 
   return {
     id: `af-${f.id}`,
     apiFootballId: f.id as number,
+    homeTeamId: teams.home.id as number,
+    awayTeamId: teams.away.id as number,
+    leagueId: fixture.league.id as number,
     league: leagueName,
     homeTeam: teams.home.name as string,
     awayTeam: teams.away.name as string,
@@ -148,61 +182,280 @@ function parseFixture(
 }
 
 /**
- * Fetch ALL fixtures for a given date in a single API call.
- * The /fixtures?date= endpoint returns the full day's results without pagination
- * (unlike /players or /odds which paginate). Do NOT send a `page` param here.
- * Passes timezone=UTC so date filtering is unambiguous.
+ * Returns the most recent completed football season year.
+ * European leagues start July/August; before August use year-1.
  */
-async function fetchAllFixturesForDate(date: string): Promise<any[]> {
+function getRecentSeason(): number {
+  const d = new Date();
+  return d.getMonth() >= 7 ? d.getFullYear() : d.getFullYear() - 1;
+}
+
+function apiHeaders(): Record<string, string> {
   const apiKey = process.env["FOOTBALL_API_KEY"];
   if (!apiKey) throw new Error("FOOTBALL_API_KEY is not configured");
+  return {
+    "x-rapidapi-key": apiKey,
+    "x-rapidapi-host": API_FOOTBALL_HOST,
+  };
+}
 
-  const url = new URL(`${API_FOOTBALL_BASE}/fixtures`);
-  url.searchParams.set("date", date);
-  url.searchParams.set("timezone", "UTC");
-
-  const response = await fetch(url.toString(), {
-    headers: {
-      // x-rapidapi-key is the auth token; x-rapidapi-host must match the actual
-      // API-Sports endpoint (v3.football.api-sports.io), NOT the RapidAPI proxy host.
-      "x-rapidapi-key": apiKey,
-      "x-rapidapi-host": API_FOOTBALL_HOST,
-    },
-  });
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`API-Football HTTP ${response.status}: ${text.slice(0, 300)}`);
+async function apiFetch(path: string, params: Record<string, string | number>): Promise<any> {
+  const url = new URL(`${API_FOOTBALL_BASE}${path}`);
+  for (const [k, v] of Object.entries(params)) {
+    url.searchParams.set(k, String(v));
   }
-
-  const data = (await response.json()) as any;
-
-  // API returns HTTP 200 with errors in the body — always check
+  const res = await fetch(url.toString(), { headers: apiHeaders() });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`API-Football HTTP ${res.status}: ${text.slice(0, 200)}`);
+  }
+  const data = await res.json() as any;
   const bodyErrors = data?.errors;
   if (bodyErrors && (Array.isArray(bodyErrors) ? bodyErrors.length > 0 : Object.keys(bodyErrors).length > 0)) {
     const msg = Array.isArray(bodyErrors) ? bodyErrors.join("; ") : JSON.stringify(bodyErrors);
     throw new Error(`API-Football error: ${msg}`);
   }
-
-  return (data?.response as any[]) ?? [];
+  return data?.response;
 }
 
 // ---------------------------------------------------------------------------
-// Main export
+// Team statistics — /teams/statistics
 // ---------------------------------------------------------------------------
 
-/**
- * Fetch today's fixtures from API-Football using ONE API call for all leagues.
- *
- * Cache strategy (radar_cache, key = ALL_FIXTURES_CACHE_KEY):
- *  - If a valid cache entry exists → return from DB, no API call.
- *  - A cache entry is valid when:
- *      · it contained NO live matches → valid for the rest of the calendar day (UTC).
- *      · it contained live matches   → valid for LIVE_CACHE_TTL_MS (2 min), then refresh.
- *  - After every API fetch the cache is upserted (delete + insert) so createdAt is fresh.
- *  - This ensures the first user to open the radar each day pays the one API request;
- *    every subsequent user reads from the DB for free.
- */
+async function fetchTeamStats(
+  teamId: number,
+  leagueId: number,
+  date: string,
+): Promise<TeamStats | null> {
+  // Cache check
+  const cached = await db
+    .select()
+    .from(teamStatsCacheTable)
+    .where(
+      and(
+        eq(teamStatsCacheTable.teamId, teamId),
+        eq(teamStatsCacheTable.leagueId, leagueId),
+        eq(teamStatsCacheTable.date, date),
+      ),
+    )
+    .limit(1);
+
+  if (cached.length > 0) {
+    logger.info({ teamId, leagueId, date }, "Team stats served from cache");
+    return JSON.parse(cached[0].result) as TeamStats;
+  }
+
+  const season = getRecentSeason();
+  logger.info({ teamId, leagueId, season }, "Fetching team stats from API-Football");
+
+  let raw: any;
+  try {
+    raw = await apiFetch("/teams/statistics", { team: teamId, league: leagueId, season });
+  } catch (err) {
+    logger.warn({ err, teamId, leagueId }, "Failed to fetch team stats");
+    return null;
+  }
+
+  if (!raw) return null;
+
+  // Count total yellow/red cards across all minute buckets
+  const yellowCards = Object.values(raw.cards?.yellow ?? {}).reduce(
+    (acc: number, v: any) => acc + (v?.total ?? 0),
+    0,
+  ) as number;
+  const redCards = Object.values(raw.cards?.red ?? {}).reduce(
+    (acc: number, v: any) => acc + (v?.total ?? 0),
+    0,
+  ) as number;
+
+  const stats: TeamStats = {
+    teamName: raw.team?.name ?? "",
+    season,
+    form: (raw.form ?? "").slice(-10), // last 10 matches
+    played: raw.fixtures?.played ?? { home: 0, away: 0, total: 0 },
+    wins: raw.fixtures?.wins ?? { home: 0, away: 0, total: 0 },
+    draws: raw.fixtures?.draws ?? { home: 0, away: 0, total: 0 },
+    losses: raw.fixtures?.loses ?? { home: 0, away: 0, total: 0 },
+    goalsFor: raw.goals?.for?.average ?? { home: "0", away: "0", total: "0" },
+    goalsAgainst: raw.goals?.against?.average ?? { home: "0", away: "0", total: "0" },
+    cleanSheets: raw.clean_sheet ?? { home: 0, away: 0, total: 0 },
+    failedToScore: raw.failed_to_score ?? { home: 0, away: 0, total: 0 },
+    yellowCards,
+    redCards,
+  };
+
+  try {
+    await db
+      .insert(teamStatsCacheTable)
+      .values({ teamId, leagueId, date, result: JSON.stringify(stats) })
+      .onConflictDoNothing();
+    logger.info({ teamId, leagueId, date }, "Team stats cached in DB");
+  } catch (err) {
+    logger.warn({ err }, "Failed to cache team stats");
+  }
+
+  return stats;
+}
+
+// ---------------------------------------------------------------------------
+// Injuries — /injuries
+// ---------------------------------------------------------------------------
+
+async function fetchInjuries(
+  fixtureId: number,
+  date: string,
+): Promise<InjuryRecord[] | null> {
+  const cached = await db
+    .select()
+    .from(injuriesCacheTable)
+    .where(
+      and(
+        eq(injuriesCacheTable.fixtureId, fixtureId),
+        eq(injuriesCacheTable.date, date),
+      ),
+    )
+    .limit(1);
+
+  if (cached.length > 0) {
+    logger.info({ fixtureId, date }, "Injuries served from cache");
+    return JSON.parse(cached[0].result) as InjuryRecord[];
+  }
+
+  logger.info({ fixtureId }, "Fetching injuries from API-Football");
+
+  let raw: any[];
+  try {
+    raw = await apiFetch("/injuries", { fixture: fixtureId });
+  } catch (err) {
+    logger.warn({ err, fixtureId }, "Failed to fetch injuries");
+    return null;
+  }
+
+  if (!Array.isArray(raw)) return null;
+
+  const injuries: InjuryRecord[] = raw.map((item: any) => ({
+    player: item.player?.name ?? "Desconocido",
+    team: item.team?.name ?? "",
+    type: item.player?.type ?? "Lesión",
+    reason: item.player?.reason ?? "",
+  }));
+
+  try {
+    await db
+      .insert(injuriesCacheTable)
+      .values({ fixtureId, date, result: JSON.stringify(injuries) })
+      .onConflictDoNothing();
+    logger.info({ fixtureId, count: injuries.length }, "Injuries cached in DB");
+  } catch (err) {
+    logger.warn({ err }, "Failed to cache injuries");
+  }
+
+  return injuries;
+}
+
+// ---------------------------------------------------------------------------
+// Head-to-head — /fixtures/headtohead
+// ---------------------------------------------------------------------------
+
+async function fetchH2H(
+  homeTeamId: number,
+  awayTeamId: number,
+  date: string,
+): Promise<H2HRecord[] | null> {
+  const cached = await db
+    .select()
+    .from(h2hCacheTable)
+    .where(
+      and(
+        eq(h2hCacheTable.homeTeamId, homeTeamId),
+        eq(h2hCacheTable.awayTeamId, awayTeamId),
+        eq(h2hCacheTable.date, date),
+      ),
+    )
+    .limit(1);
+
+  if (cached.length > 0) {
+    logger.info({ homeTeamId, awayTeamId, date }, "H2H served from cache");
+    return JSON.parse(cached[0].result) as H2HRecord[];
+  }
+
+  logger.info({ homeTeamId, awayTeamId }, "Fetching H2H from API-Football");
+
+  let raw: any[];
+  try {
+    raw = await apiFetch("/fixtures/headtohead", {
+      h2h: `${homeTeamId}-${awayTeamId}`,
+      last: 5,
+    });
+  } catch (err) {
+    logger.warn({ err, homeTeamId, awayTeamId }, "Failed to fetch H2H");
+    return null;
+  }
+
+  if (!Array.isArray(raw)) return null;
+
+  const h2h: H2HRecord[] = raw.slice(0, 5).map((f: any) => {
+    const scoreHome = f.goals?.home ?? null;
+    const scoreAway = f.goals?.away ?? null;
+    let winner: "home" | "away" | "draw" = "draw";
+    if (scoreHome !== null && scoreAway !== null) {
+      if (scoreHome > scoreAway) winner = "home";
+      else if (scoreAway > scoreHome) winner = "away";
+    }
+    return {
+      date: (f.fixture?.date ?? "").split("T")[0],
+      homeTeam: f.teams?.home?.name ?? "",
+      awayTeam: f.teams?.away?.name ?? "",
+      scoreHome,
+      scoreAway,
+      winner,
+    };
+  });
+
+  try {
+    await db
+      .insert(h2hCacheTable)
+      .values({ homeTeamId, awayTeamId, date, result: JSON.stringify(h2h) })
+      .onConflictDoNothing();
+    logger.info({ homeTeamId, awayTeamId, count: h2h.length }, "H2H cached in DB");
+  } catch (err) {
+    logger.warn({ err }, "Failed to cache H2H");
+  }
+
+  return h2h;
+}
+
+// ---------------------------------------------------------------------------
+// Enrichment bundle — all extra data for a match, fetched in parallel
+// ---------------------------------------------------------------------------
+
+export async function enrichMatchForAnalysis(
+  homeTeamId: number,
+  awayTeamId: number,
+  leagueId: number,
+  fixtureId: number,
+): Promise<MatchEnrichment> {
+  const date = new Date().toISOString().split("T")[0];
+
+  const [homeStats, awayStats, injuries, h2h] = await Promise.all([
+    fetchTeamStats(homeTeamId, leagueId, date).catch(() => null),
+    fetchTeamStats(awayTeamId, leagueId, date).catch(() => null),
+    fetchInjuries(fixtureId, date).catch(() => null),
+    fetchH2H(homeTeamId, awayTeamId, date).catch(() => null),
+  ]);
+
+  return { homeStats, awayStats, injuries, h2h };
+}
+
+// ---------------------------------------------------------------------------
+// Fixtures fetch (radar)
+// ---------------------------------------------------------------------------
+
+async function fetchAllFixturesForDate(date: string): Promise<any[]> {
+  const raw = await apiFetch("/fixtures", { date, timezone: "UTC" });
+  return Array.isArray(raw) ? raw : [];
+}
+
 export async function getMatchesFromApiFootball(
   leagues?: string[],
 ): Promise<{ league: string; matches: ApiFootballMatch[] }[]> {
@@ -213,7 +466,7 @@ export async function getMatchesFromApiFootball(
       .filter(Boolean),
   );
 
-  // 1. Check for a cache entry for today
+  // 1. Check cache
   const cached = await db
     .select()
     .from(radarCacheTable)
@@ -244,7 +497,6 @@ export async function getMatchesFromApiFootball(
   }
 
   if (allFixtures === null) {
-    // 2. Fetch from API (one request covers all leagues for the day)
     try {
       const raw = await fetchAllFixturesForDate(date);
       allFixtures = raw
@@ -265,9 +517,7 @@ export async function getMatchesFromApiFootball(
         "API-Football fixtures fetched — caching in DB",
       );
 
-      // 3. Upsert cache: delete any stale row, then insert fresh one
-      //    Always cache — even with live matches — so subsequent users hit the DB.
-      //    The TTL logic above handles freshness for live data.
+      // Upsert: delete stale row then insert fresh
       await db
         .delete(radarCacheTable)
         .where(
@@ -276,7 +526,7 @@ export async function getMatchesFromApiFootball(
             eq(radarCacheTable.league, ALL_FIXTURES_CACHE_KEY),
           ),
         )
-        .catch((err) => logger.warn({ err }, "Failed to clear stale cache row"));
+        .catch((err) => logger.warn({ err }, "Failed to clear stale radar cache"));
 
       await db
         .insert(radarCacheTable)
@@ -285,20 +535,21 @@ export async function getMatchesFromApiFootball(
           league: ALL_FIXTURES_CACHE_KEY,
           result: JSON.stringify(allFixtures),
         })
-        .catch((err) => logger.warn({ err }, "Failed to write cache row"));
+        .onConflictDoNothing()
+        .catch((err) => logger.warn({ err }, "Failed to write radar cache"));
     } catch (err) {
       logger.error({ err }, "API-Football fetch failed");
       throw err;
     }
   }
 
-  // 4. Filter to the leagues the caller requested
+  // Filter to requested leagues
   const filtered = allFixtures.filter((m) => {
     const id = LEAGUE_ID_BY_NAME[m.league];
     return id !== undefined && wantedLeagueIds.has(id);
   });
 
-  // 5. Enrich with hasAnalysis from analysis_cache
+  // Enrich with hasAnalysis flag
   if (filtered.length > 0) {
     try {
       const analysedToday = await db
@@ -326,7 +577,7 @@ export async function getMatchesFromApiFootball(
     }
   }
 
-  // 6. Group by league, preserving the order of LEAGUE_ID_BY_NAME
+  // Group by league in original order
   const byLeague = new Map<string, ApiFootballMatch[]>();
   for (const m of filtered) {
     const arr = byLeague.get(m.league) ?? [];

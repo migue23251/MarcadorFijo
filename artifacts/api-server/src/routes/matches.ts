@@ -1,13 +1,15 @@
 import { Router, type IRouter } from "express";
 import { RadarMatchesBody, AnalyzeMatchBody } from "@workspace/api-zod";
-import {
-  requireAuth,
-  requireSubscription,
-} from "../lib/auth";
+import { requireAuth, requireSubscription } from "../lib/auth";
 import { analyzeMatch } from "../lib/groq";
 import { getMatchOdds } from "../lib/odds";
-import { getMatchesFromApiFootball } from "../lib/api-football";
-import { db, analysisCacheTable } from "@workspace/db";
+import {
+  getMatchesFromApiFootball,
+  enrichMatchForAnalysis,
+  type ApiFootballMatch,
+} from "../lib/api-football";
+import { logger } from "../lib/logger";
+import { db, analysisCacheTable, radarCacheTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -75,7 +77,7 @@ router.post(
   },
 );
 
-// POST /matches/analyze — AI prediction via Groq + real odds from The Odds API
+// POST /matches/analyze — enriched AI prediction via Groq
 router.post(
   "/matches/analyze",
   requireAuth,
@@ -89,11 +91,68 @@ router.post(
 
     try {
       const { homeTeam, awayTeam, league, kickoffTime } = parsed.data;
+      const date = new Date().toISOString().split("T")[0];
 
-      // Fetch real odds to enrich the AI prompt (non-fatal if unavailable)
-      const oddsData = await getMatchOdds(homeTeam, awayTeam, league).catch(() => null);
+      // --- Look up fixture metadata from radar cache for enrichment ---
+      let fixtureId: number | undefined;
+      let homeTeamId: number | undefined;
+      let awayTeamId: number | undefined;
+      let leagueId: number | undefined;
 
-      const analysis = await analyzeMatch(homeTeam, awayTeam, league, kickoffTime, oddsData);
+      try {
+        const radarCached = await db
+          .select()
+          .from(radarCacheTable)
+          .where(
+            and(
+              eq(radarCacheTable.date, date),
+              eq(radarCacheTable.league, "af_all"),
+            ),
+          )
+          .limit(1);
+
+        if (radarCached.length > 0) {
+          const fixtures = JSON.parse(radarCached[0].result) as ApiFootballMatch[];
+          const match = fixtures.find(
+            (m) =>
+              m.homeTeam.toLowerCase() === homeTeam.toLowerCase() &&
+              m.awayTeam.toLowerCase() === awayTeam.toLowerCase(),
+          );
+          if (match) {
+            fixtureId = match.apiFootballId;
+            homeTeamId = match.homeTeamId;
+            awayTeamId = match.awayTeamId;
+            leagueId = match.leagueId;
+          }
+        }
+      } catch (err) {
+        logger.warn({ err }, "Failed to look up fixture metadata from radar cache");
+      }
+
+      // --- Fetch all enrichment data in parallel (non-fatal if any fail) ---
+      const canEnrich =
+        fixtureId !== undefined &&
+        homeTeamId !== undefined &&
+        awayTeamId !== undefined &&
+        leagueId !== undefined;
+
+      const [oddsData, enrichment] = await Promise.all([
+        getMatchOdds(homeTeam, awayTeam, league).catch(() => null),
+        canEnrich
+          ? enrichMatchForAnalysis(homeTeamId!, awayTeamId!, leagueId!, fixtureId!).catch(
+              () => null,
+            )
+          : Promise.resolve(null),
+      ]);
+
+      const analysis = await analyzeMatch(
+        homeTeam,
+        awayTeam,
+        league,
+        kickoffTime,
+        oddsData,
+        enrichment,
+      );
       res.json(analysis);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Error al analizar el partido";
