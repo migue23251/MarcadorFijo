@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { Link } from "wouter";
 import {
   Radar,
@@ -184,6 +184,176 @@ function ProbBar({ label, value }: { label: string; value: number }) {
 }
 
 /* ─── Page ──────────────────────────────────────────────────────────────── */
+/* ─── Plan card (shared between carousel and desktop grid) ─────────────── */
+function PlanCard({
+  label, price, period, perMonth, savings, popular, features,
+  style, className,
+}: {
+  label: string; price: string; period: string; perMonth: number;
+  savings: number | null; popular: boolean; features: string[];
+  style?: React.CSSProperties; className?: string;
+}) {
+  return (
+    <div
+      className={`relative flex flex-col rounded-xl border p-6 transition-all duration-400 ${
+        popular
+          ? "border-primary bg-primary/5 shadow-xl shadow-primary/15"
+          : "border-border bg-card"
+      } ${className ?? ""}`}
+      style={style}
+    >
+      {popular && (
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-wider shadow">
+            <Zap className="w-3 h-3" />
+            Más popular
+          </span>
+        </div>
+      )}
+      <div className="mb-4">
+        <p className="text-sm font-semibold text-muted-foreground mb-1">{label}</p>
+        <div className="flex items-end gap-1">
+          <span className="text-2xl font-black text-foreground">{price}</span>
+          <span className="text-xs text-muted-foreground mb-1">{period}</span>
+        </div>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          ≈ ${Math.round(perMonth).toLocaleString("es-CO")} COP / mes
+        </p>
+        {savings && (
+          <span className="mt-2 inline-block px-2 py-0.5 rounded-full bg-primary/15 text-primary text-[11px] font-bold">
+            Ahorra {savings}%
+          </span>
+        )}
+      </div>
+      <ul className="flex-1 space-y-2 mb-6">
+        {features.map((f) => (
+          <li key={f} className="flex items-start gap-2 text-xs text-muted-foreground">
+            <Check className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
+            {f}
+          </li>
+        ))}
+      </ul>
+      <Link
+        href="/sign-up"
+        className={`w-full py-2.5 rounded-md text-sm font-semibold text-center transition-all ${
+          popular
+            ? "bg-primary text-primary-foreground hover:bg-primary/90"
+            : "border border-border bg-background hover:border-primary hover:text-primary"
+        }`}
+      >
+        Empezar
+      </Link>
+    </div>
+  );
+}
+
+/* ─── Mobile 3-D pricing carousel ──────────────────────────────────────── */
+function PricingCarousel() {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [activeIdx, setActiveIdx] = useState(1); // start on "Trimestral"
+
+  const CARD_W = 272; // px — card width
+  const GAP = 16;     // px — gap between cards
+
+  const handleScroll = useCallback(() => {
+    const el = trackRef.current;
+    if (!el) return;
+    const center = el.scrollLeft + el.clientWidth / 2;
+    let closest = 0;
+    let minDist = Infinity;
+    PLANS.forEach((_, i) => {
+      // each card centre = sidepad + i*(CARD_W+GAP) + CARD_W/2
+      const sidepad = (el.clientWidth - CARD_W) / 2;
+      const cardCenter = sidepad + i * (CARD_W + GAP) + CARD_W / 2;
+      const dist = Math.abs(center - cardCenter);
+      if (dist < minDist) { minDist = dist; closest = i; }
+    });
+    setActiveIdx(closest);
+  }, []);
+
+  // Scroll to popular card on mount
+  const mountedRef = useRef(false);
+  const trackCallbackRef = useCallback((el: HTMLDivElement | null) => {
+    (trackRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+    if (el && !mountedRef.current) {
+      mountedRef.current = true;
+      const sidepad = (el.clientWidth - CARD_W) / 2;
+      el.scrollLeft = sidepad + 1 * (CARD_W + GAP) - (el.clientWidth - CARD_W) / 2;
+    }
+  }, []);
+
+  return (
+    <div className="relative">
+      {/* scroll track */}
+      <div
+        ref={trackCallbackRef}
+        onScroll={handleScroll}
+        className="flex overflow-x-auto scroll-smooth snap-x snap-mandatory"
+        style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
+      >
+        {/* side padding so first and last card can centre */}
+        <style>{`.pricing-track::-webkit-scrollbar{display:none}`}</style>
+
+        {PLANS.map((plan, i) => {
+          const offset = i - activeIdx;          // -3 … +3
+          const absOff = Math.abs(offset);
+          const isActive = offset === 0;
+
+          const rotateY = offset * 38;           // degrees — fan out
+          const scale   = isActive ? 1 : Math.max(0.78, 1 - absOff * 0.09);
+          const translateZ = isActive ? 0 : -absOff * 40;
+          const opacity = isActive ? 1 : Math.max(0.45, 1 - absOff * 0.28);
+
+          return (
+            <div
+              key={plan.id}
+              className="flex-shrink-0 snap-center"
+              style={{
+                width: CARD_W,
+                marginLeft: i === 0 ? `calc((100% - ${CARD_W}px) / 2)` : GAP,
+                marginRight: i === PLANS.length - 1 ? `calc((100% - ${CARD_W}px) / 2)` : 0,
+              }}
+            >
+              <div
+                style={{
+                  transform: `perspective(900px) rotateY(${rotateY}deg) scale(${scale}) translateZ(${translateZ}px)`,
+                  opacity,
+                  transition: "transform 0.45s cubic-bezier(.25,.8,.25,1), opacity 0.45s ease",
+                  transformOrigin: offset < 0 ? "right center" : offset > 0 ? "left center" : "center center",
+                  willChange: "transform, opacity",
+                }}
+              >
+                <PlanCard {...plan} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* dot indicators */}
+      <div className="flex justify-center gap-1.5 mt-5">
+        {PLANS.map((_, i) => (
+          <button
+            key={i}
+            type="button"
+            aria-label={`Plan ${i + 1}`}
+            onClick={() => {
+              const el = trackRef.current;
+              if (!el) return;
+              const sidepad = (el.clientWidth - CARD_W) / 2;
+              el.scrollTo({ left: sidepad + i * (CARD_W + GAP) - (el.clientWidth - CARD_W) / 2, behavior: "smooth" });
+              setActiveIdx(i);
+            }}
+            className={`h-1.5 rounded-full transition-all duration-300 ${
+              i === activeIdx ? "w-5 bg-primary" : "w-1.5 bg-border hover:bg-muted-foreground"
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const VERDICT_STYLES: Record<string, string> = {
   valor: "bg-primary/15 text-primary border border-primary/30",
   neutro: "bg-muted text-muted-foreground border border-border",
@@ -429,10 +599,10 @@ export default function Home() {
         </section>
 
         {/* ── Pricing ─────────────────────────────────────────────────────────── */}
-        <section className="py-16 px-4 bg-muted/30 border-b border-border">
-          <div className="max-w-5xl mx-auto space-y-10">
+        <section className="py-16 bg-muted/30 border-b border-border">
+          <div className="space-y-10">
 
-            <div className="text-center space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div className="text-center space-y-3 px-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
               <span className="inline-block px-3 py-1 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-semibold uppercase tracking-wider">
                 Planes
               </span>
@@ -444,62 +614,15 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="flex gap-5 overflow-x-auto pb-2 snap-x snap-mandatory lg:grid lg:grid-cols-4 lg:overflow-visible lg:pb-0 animate-in fade-in slide-in-from-bottom-6 duration-700 delay-100">
-              {PLANS.map(({ id, label, price, period, perMonth, savings, popular, features }, i) => (
-                <div
-                  key={id}
-                  className={`relative flex flex-col rounded-xl border p-6 transition-all duration-300 flex-shrink-0 w-[72vw] sm:w-[45vw] lg:w-auto snap-start ${
-                    popular
-                      ? "border-primary bg-primary/5 shadow-lg shadow-primary/10"
-                      : "border-border bg-card hover:border-primary/50"
-                  }`}
-                  style={{ animationDelay: `${i * 80}ms` }}
-                >
-                  {popular && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-wider shadow">
-                        <Zap className="w-3 h-3" />
-                        Más popular
-                      </span>
-                    </div>
-                  )}
+            {/* ── Mobile carousel (hidden on lg+) ── */}
+            <div className="lg:hidden">
+              <PricingCarousel />
+            </div>
 
-                  <div className="mb-4">
-                    <p className="text-sm font-semibold text-muted-foreground mb-1">{label}</p>
-                    <div className="flex items-end gap-1">
-                      <span className="text-2xl font-black text-foreground">{price}</span>
-                      <span className="text-xs text-muted-foreground mb-1">{period}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      ≈ ${Math.round(perMonth).toLocaleString("es-CO")} COP / mes
-                    </p>
-                    {savings && (
-                      <span className="mt-2 inline-block px-2 py-0.5 rounded-full bg-primary/15 text-primary text-[11px] font-bold">
-                        Ahorra {savings}%
-                      </span>
-                    )}
-                  </div>
-
-                  <ul className="flex-1 space-y-2 mb-6">
-                    {features.map((f) => (
-                      <li key={f} className="flex items-start gap-2 text-xs text-muted-foreground">
-                        <Check className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
-
-                  <Link
-                    href="/sign-up"
-                    className={`w-full py-2.5 rounded-md text-sm font-semibold text-center transition-all ${
-                      popular
-                        ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                        : "border border-border bg-background hover:border-primary hover:text-primary"
-                    }`}
-                  >
-                    Empezar
-                  </Link>
-                </div>
+            {/* ── Desktop grid (hidden below lg) ── */}
+            <div className="hidden lg:grid lg:grid-cols-4 gap-5 px-4 max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-6 duration-700 delay-100">
+              {PLANS.map(({ id, label, price, period, perMonth, savings, popular, features }) => (
+                <PlanCard key={id} label={label} price={price} period={period} perMonth={perMonth} savings={savings} popular={popular} features={features} />
               ))}
             </div>
           </div>
