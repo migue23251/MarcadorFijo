@@ -1,78 +1,59 @@
-# RadarBet
+# MarcadorFijo
 
-A full-stack football betting management and prediction app powered by Gemini AI. Users get AI-driven match radar and analysis, then track their bets with ROI stats. Admins control user subscriptions.
-
-## Run & Operate
-
-- `pnpm --filter @workspace/football-bets run dev` — frontend (port auto-assigned)
-- `pnpm --filter @workspace/api-server run dev` — API server (port 8080)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- `pnpm --filter @workspace/db run seed` — insert seed data (admin user)
-- Required env: `DATABASE_URL` — Postgres connection string
-- Required env: `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`, `VITE_CLERK_PUBLISHABLE_KEY` — auto-provisioned via Clerk
-- Required env: `FOOTBALL_API_KEY` — API-Football key from RapidAPI (100 req/day free tier)
-- Required env: `GROQ_API_KEY` — Groq API key for AI analysis (console.groq.com, free tier, generous limits)
-- Required env: `THE_ODDS_API_KEY` — The Odds API key for real bookmaker odds (the-odds-api.com, 500 req/month free)
+AI-powered football betting analysis app. Analyzes matches with real statistical data (team form, injuries, H2H) and generates value bet recommendations using Groq's LLaMA model.
 
 ## Stack
 
-- pnpm workspaces, Node.js 24, TypeScript 5.9
-- Frontend: React + Vite + Tailwind CSS v4 + Wouter (routing)
-- Auth: Clerk (Replit-managed) via `@clerk/react` + `@clerk/express`
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- AI: Groq (Llama 3.3 70B) via `groq-sdk` — server-side key, no per-user config needed
-- Odds: The Odds API — real bookmaker odds injected into AI prompt for EV-based predictions
+- **Frontend** (`artifacts/football-bets`): React + Vite + Tailwind + shadcn/ui, Clerk auth, Wouter routing
+- **Backend** (`artifacts/api-server`): Express 5 + Drizzle ORM + PostgreSQL, Clerk auth middleware, Groq AI
+- **Database** (`lib/db`): Drizzle schema — users, bets, analysis cache, user configs
+- **Shared libs**: `lib/api-spec` (OpenAPI), `lib/api-zod` (Zod schemas), `lib/api-client-react` (typed React Query hooks)
 
-## Where things live
+## Running the project
 
-- `artifacts/football-bets/` — React frontend
-- `artifacts/api-server/` — Express API server
-- `lib/api-spec/openapi.yaml` — OpenAPI spec (source of truth)
-- `lib/api-client-react/src/generated/` — generated React Query hooks
-- `lib/api-zod/src/generated/` — generated Zod schemas for server validation
-- `lib/db/src/schema/` — Drizzle schema (users, userConfigs, bets tables)
+```bash
+# Install dependencies (already done)
+pnpm install
 
-## Architecture decisions
+# Push DB schema
+pnpm --filter @workspace/db run push
 
-- **JIT user provisioning:** Users are created in the DB on first authenticated API call using their Clerk ID. The first user to register becomes admin automatically.
-- **Encrypted Gemini keys:** Each user's Gemini API key is encrypted with AES-256-GCM before storage. Key comes from `ENCRYPTION_KEY` env var (falls back to `SESSION_SECRET`).
-- **Subscription gating:** `/matches/radar` and `/matches/analyze` return 403 if `active_subscription = false`. Admin can toggle any user's subscription via `/users/:userId/subscription`.
-- **Gemini SYSTEM_ANALYSIS_PROMPT:** Empty constant in `artifacts/api-server/src/lib/gemini.ts` — fill it in to customize the analysis prompt sent to Gemini for match analysis.
-- **No mock data:** All match data and predictions come from the user's Gemini API key in real-time.
+# Start frontend (workflow: "artifacts/football-bets: web")
+pnpm --filter @workspace/football-bets run dev
 
-## Product
+# Start API server (workflow: "artifacts/api-server: API Server")
+pnpm --filter @workspace/api-server run dev
+```
 
-- **Landing page:** Public marketing page for unauthenticated users
-- **Dashboard (`/dashboard`):** Radar de Partidos button → API-Football fetches today's real fixtures grouped by league (with live scores + match status). Each match has "Analizar Partido" → Gemini returns predictions. Each prediction has "Apostar" → bet registration modal.
-- **Historial (`/historial`):** Full bet history with ROI stats, win rate, filter by status. One-click mark as Ganada/Perdida.
-- **Configuración (`/configuracion`):** Gemini API key management, subscription status display, profile update.
-- **Admin (`/admin`):** User management table with subscription toggle switches.
+Both workflows are configured and start automatically in Replit.
 
-## Setup status
+## Required secrets
 
-Project is fully set up to run on Replit:
-- Dependencies installed from the checked-in lockfile via `pnpm install --frozen-lockfile` (also runs automatically on `scripts/post-merge.sh`)
-- Managed workflows configured for the frontend (`artifacts/football-bets: web`), API server (`artifacts/api-server: API Server`), and mockup sandbox
-- PostgreSQL provisioned via Replit's built-in database; `DATABASE_URL` is runtime-managed and auto-injected; `postgresql-16` module is listed in `.replit` for local psql tooling
-- DB schema pushed via `pnpm --filter @workspace/db run push` (also runs automatically on `scripts/post-merge.sh`)
-- Clerk authentication provisioned via Replit-managed Clerk (app_3H1kJWPpMm0ph73dT5hrOMj40y4); `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`, and `VITE_CLERK_PUBLISHABLE_KEY` are set as Replit Secrets
-- `SESSION_SECRET` is available in the environment (used as fallback `ENCRYPTION_KEY` for API key encryption)
-- `FOOTBALL_API_KEY`, `GROQ_API_KEY`, and `THE_ODDS_API_KEY` are set as Replit Secrets for live fixture fetching, AI analysis, and bookmaker odds
+| Secret | Purpose |
+|---|---|
+| `CLERK_PUBLISHABLE_KEY` | Clerk auth (public key, also forwarded to frontend via vite `define`) |
+| `CLERK_SECRET_KEY` | Clerk auth (backend) |
+| `GROQ_API_KEY` | AI match analysis (LLaMA 3.3 70B) |
+| `SESSION_SECRET` | Session encryption fallback |
+
+`DATABASE_URL` is managed by Replit automatically.
+
+## Environment variables
+
+| Variable | Value | Purpose |
+|---|---|---|
+| `BASE_PATH` | `/` | Vite base path for the frontend |
+| `NODE_ENV` | `development` | Runtime mode |
+| `LOG_LEVEL` | `info` | Pino log level |
+
+## Architecture notes
+
+- The first user to sign up automatically becomes admin with an active subscription.
+- AI analysis results are cached in the `analysis_cache` DB table (keyed by date + teams + league) to avoid redundant API calls.
+- The Clerk proxy middleware (`/api/__clerk`) is only active in production; dev uses Clerk's CDN directly.
+- The frontend reads `VITE_CLERK_PUBLISHABLE_KEY` which is injected at build time from `CLERK_PUBLISHABLE_KEY` via Vite's `define` config.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
-
-## Gotchas
-
-- After any OpenAPI spec change, always run codegen before touching routes or frontend hooks.
-- Clerk dev-key warning in console is normal and expected in development.
-- `SYSTEM_ANALYSIS_PROMPT` in `artifacts/api-server/src/lib/gemini.ts` is intentionally empty — the admin fills it in.
-- Gemini API key encryption uses `SESSION_SECRET` as fallback key; in production, set a dedicated `ENCRYPTION_KEY`.
-- Drizzle `doublePrecision` columns return JS numbers directly (no string conversion needed).
+- Keep the existing pnpm monorepo structure — do not restructure or migrate.
+- App UI is in Spanish.

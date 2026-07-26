@@ -64,6 +64,13 @@ export default defineConfig({
     outDir: path.resolve(import.meta.dirname, 'dist/public'),
     emptyOutDir: true,
   },
+  define: {
+    // Forward the secret to the Vite frontend bundle at build/dev time.
+    // CLERK_PUBLISHABLE_KEY is a public key (pk_test_/pk_live_) — safe to embed.
+    'import.meta.env.VITE_CLERK_PUBLISHABLE_KEY': JSON.stringify(
+      process.env.CLERK_PUBLISHABLE_KEY ?? '',
+    ),
+  },
   server: {
     port,
     strictPort: true,
