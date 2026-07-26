@@ -59,11 +59,11 @@ A full-stack football betting management and prediction app powered by Gemini AI
 Project is fully set up to run on Replit:
 - Dependencies installed from the checked-in lockfile via `pnpm install --frozen-lockfile` (also runs automatically on `scripts/post-merge.sh`)
 - Managed workflows configured for the frontend (`artifacts/football-bets: web`), API server (`artifacts/api-server: API Server`), and mockup sandbox
-- PostgreSQL provisioned via Replit's built-in database; `DATABASE_URL` is runtime-managed and auto-injected
+- PostgreSQL provisioned via Replit's built-in database; `DATABASE_URL` is runtime-managed and auto-injected; `postgresql-16` module is listed in `.replit` for local psql tooling
 - DB schema pushed via `pnpm --filter @workspace/db run push` (also runs automatically on `scripts/post-merge.sh`)
-- Clerk authentication provisioned via Replit-managed Clerk; `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`, and `VITE_CLERK_PUBLISHABLE_KEY` are set as secrets
-- `SESSION_SECRET` is available in the environment (used as fallback `ENCRYPTION_KEY` for Gemini API key encryption)
-- `FOOTBALL_API_KEY` is set as a Replit Secret for live football fixture fetching via API-Football (RapidAPI)
+- Clerk authentication provisioned via Replit-managed Clerk (app_3H1kJWPpMm0ph73dT5hrOMj40y4); `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`, and `VITE_CLERK_PUBLISHABLE_KEY` are set as Replit Secrets
+- `SESSION_SECRET` is available in the environment (used as fallback `ENCRYPTION_KEY` for API key encryption)
+- `FOOTBALL_API_KEY`, `GROQ_API_KEY`, and `THE_ODDS_API_KEY` are set as Replit Secrets for live fixture fetching, AI analysis, and bookmaker odds
 
 ## User preferences
 
