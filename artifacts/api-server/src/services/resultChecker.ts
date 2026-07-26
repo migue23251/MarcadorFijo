@@ -7,6 +7,7 @@
  */
 
 import { logger } from "../lib/logger";
+import { fetchConRotacion } from "../lib/fetchConRotacion";
 import { db, betsTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
 
@@ -48,10 +49,18 @@ function isTodayKickoff(kickoffTime: string, date: string): boolean {
 // Petición a API-Football (una sola llamada)
 // ---------------------------------------------------------------------------
 
+function getApiFootballKeys(): string[] {
+  return [
+    process.env["API_FOOTBALL_KEY_1"],
+    process.env["API_FOOTBALL_KEY_2"],
+    process.env["FOOTBALL_API_KEY"],
+  ].filter((k): k is string => Boolean(k));
+}
+
 async function fetchFinishedFixtures(date: string): Promise<FixtureMap> {
-  const apiKey = process.env["FOOTBALL_API_KEY"];
-  if (!apiKey) {
-    throw new Error("FOOTBALL_API_KEY no está configurada");
+  const keys = getApiFootballKeys();
+  if (keys.length === 0) {
+    throw new Error("No API-Football keys configuradas (API_FOOTBALL_KEY_1 / FOOTBALL_API_KEY)");
   }
 
   // Una única petición con todos los estados finalizados
@@ -59,21 +68,14 @@ async function fetchFinishedFixtures(date: string): Promise<FixtureMap> {
   url.searchParams.set("date", date);
   url.searchParams.set("status", "FT-AET-PEN-AWD-WO");
 
-  logger.info({ date, url: url.toString() }, "Fetching finished fixtures from API-Football");
+  logger.info({ date, url: url.pathname }, "Fetching finished fixtures from API-Football");
 
-  const res = await fetch(url.toString(), {
-    headers: {
-      "x-rapidapi-key": apiKey,
-      "x-rapidapi-host": "v3.football.api-sports.io",
-    },
+  const data = await fetchConRotacion(url, keys, {
+    type: "header",
+    name: "x-rapidapi-key",
+    extraHeaders: { "x-rapidapi-host": "v3.football.api-sports.io" },
   });
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`API-Football HTTP ${res.status}: ${text.slice(0, 200)}`);
-  }
-
-  const data = (await res.json()) as any;
   const fixtures: any[] = Array.isArray(data?.response) ? data.response : [];
 
   logger.info({ date, count: fixtures.length }, "Finished fixtures received");

@@ -1,4 +1,5 @@
 import { logger } from "./logger";
+import { fetchConRotacion } from "./fetchConRotacion";
 import { db, oddsCacheTable } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 
@@ -62,10 +63,24 @@ function teamsMatch(a: string, b: string): boolean {
   return na === nb || na.includes(nb) || nb.includes(na);
 }
 
+/**
+ * Resuelve las keys de The Odds API en orden de prioridad:
+ * 1. ODDS_API_KEY_1  (nueva primaria)
+ * 2. ODDS_API_KEY_2  (nueva secundaria / failover)
+ * 3. THE_ODDS_API_KEY (nombre anterior — compatibilidad hacia atrás)
+ */
+function getOddsApiKeys(): string[] {
+  return [
+    process.env["ODDS_API_KEY_1"],
+    process.env["ODDS_API_KEY_2"],
+    process.env["THE_ODDS_API_KEY"],
+  ].filter((k): k is string => Boolean(k));
+}
+
 async function fetchSportOdds(sportKey: string, date: string): Promise<OddsEvent[] | null> {
-  const apiKey = process.env["THE_ODDS_API_KEY"];
-  if (!apiKey) {
-    logger.warn("THE_ODDS_API_KEY not configured — skipping odds enrichment");
+  const keys = getOddsApiKeys();
+  if (keys.length === 0) {
+    logger.warn("No Odds API keys configuradas — omitiendo enriquecimiento de cuotas");
     return null;
   }
 
@@ -82,29 +97,26 @@ async function fetchSportOdds(sportKey: string, date: string): Promise<OddsEvent
   }
 
   const url = new URL(`${ODDS_API_BASE}/sports/${sportKey}/odds`);
-  url.searchParams.set("apiKey", apiKey);
   url.searchParams.set("regions", "eu");
   url.searchParams.set("markets", "h2h,totals,btts");
   url.searchParams.set("oddsFormat", "decimal");
 
   logger.info({ sportKey }, "Fetching odds from The Odds API");
 
-  let res: Response;
+  let events: OddsEvent[];
   try {
-    res = await fetch(url.toString());
+    const body = await fetchConRotacion(url, keys, { type: "param", name: "apiKey" });
+    if (!Array.isArray(body)) {
+      logger.warn({ sportKey, body }, "Odds API devolvió un body inesperado");
+      return null;
+    }
+    events = body as OddsEvent[];
   } catch (err) {
-    logger.warn({ err, sportKey }, "Network error fetching odds");
+    logger.warn({ err, sportKey }, "Error al obtener cuotas de The Odds API");
     return null;
   }
 
-  if (!res.ok) {
-    logger.warn({ sportKey, status: res.status }, "Odds API non-OK response");
-    return null;
-  }
-
-  const events: OddsEvent[] = await res.json();
-
-  // Cache — use onConflictDoNothing so concurrent requests don't collide
+  // Cache — onConflictDoNothing evita colisiones en peticiones concurrentes
   try {
     await db
       .insert(oddsCacheTable)

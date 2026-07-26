@@ -1,4 +1,5 @@
 import { logger } from "./logger";
+import { fetchConRotacion } from "./fetchConRotacion";
 import {
   db,
   radarCacheTable,
@@ -190,13 +191,18 @@ function getRecentSeason(): number {
   return d.getMonth() >= 7 ? d.getFullYear() : d.getFullYear() - 1;
 }
 
-function apiHeaders(): Record<string, string> {
-  const apiKey = process.env["FOOTBALL_API_KEY"];
-  if (!apiKey) throw new Error("FOOTBALL_API_KEY is not configured");
-  return {
-    "x-rapidapi-key": apiKey,
-    "x-rapidapi-host": API_FOOTBALL_HOST,
-  };
+/**
+ * Resuelve las keys de API-Football en orden de prioridad:
+ * 1. API_FOOTBALL_KEY_1 (nueva primaria)
+ * 2. API_FOOTBALL_KEY_2 (nueva secundaria / failover)
+ * 3. FOOTBALL_API_KEY   (nombre anterior — compatibilidad hacia atrás)
+ */
+function getApiFootballKeys(): string[] {
+  return [
+    process.env["API_FOOTBALL_KEY_1"],
+    process.env["API_FOOTBALL_KEY_2"],
+    process.env["FOOTBALL_API_KEY"],
+  ].filter((k): k is string => Boolean(k));
 }
 
 async function apiFetch(path: string, params: Record<string, string | number>): Promise<any> {
@@ -204,17 +210,26 @@ async function apiFetch(path: string, params: Record<string, string | number>): 
   for (const [k, v] of Object.entries(params)) {
     url.searchParams.set(k, String(v));
   }
-  const res = await fetch(url.toString(), { headers: apiHeaders() });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`API-Football HTTP ${res.status}: ${text.slice(0, 200)}`);
+
+  const keys = getApiFootballKeys();
+  if (keys.length === 0) {
+    throw new Error("No API-Football keys configuradas (API_FOOTBALL_KEY_1 / FOOTBALL_API_KEY)");
   }
-  const data = await res.json() as any;
+
+  // fetchConRotacion maneja 429 y rate-limit en body; devuelve el JSON completo
+  const data = await fetchConRotacion(url, keys, {
+    type: "header",
+    name: "x-rapidapi-key",
+    extraHeaders: { "x-rapidapi-host": API_FOOTBALL_HOST },
+  });
+
+  // Errores de API-Football que NO son rate-limit (fetchConRotacion ya rotuló los de rate-limit)
   const bodyErrors = data?.errors;
   if (bodyErrors && (Array.isArray(bodyErrors) ? bodyErrors.length > 0 : Object.keys(bodyErrors).length > 0)) {
     const msg = Array.isArray(bodyErrors) ? bodyErrors.join("; ") : JSON.stringify(bodyErrors);
     throw new Error(`API-Football error: ${msg}`);
   }
+
   return data?.response;
 }
 
