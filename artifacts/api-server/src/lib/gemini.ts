@@ -66,9 +66,28 @@ async function callGemini(
     let retryAfter: number | undefined;
 
     if (status === 429) {
-      const retryMatch = message.match(/retry in ([\d.]+)s/i);
-      retryAfter = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) + 2 : 60;
-      userMessage = `Cuota de Gemini agotada para el modelo "${model}". Intenta de nuevo en ${retryAfter} segundos.`;
+      // Parse retry delay — Gemini can respond in seconds ("retry in 30s") or
+      // milliseconds ("Please retry in 990.398478ms")
+      const retrySecMatch = message.match(/retry in ([\d.]+)s/i);
+      const retryMsMatch  = message.match(/retry in ([\d.]+)ms/i);
+      if (retrySecMatch) {
+        retryAfter = Math.ceil(parseFloat(retrySecMatch[1])) + 2;
+      } else if (retryMsMatch) {
+        retryAfter = Math.ceil(parseFloat(retryMsMatch[1]) / 1000) + 1;
+      } else {
+        retryAfter = 60;
+      }
+
+      // Detect limit: 0 — means the project has no free-tier quota at all
+      // (Google Cloud project without billing, or wrong key type)
+      if (/limit:\s*0/i.test(message)) {
+        userMessage =
+          `Tu API Key no tiene cuota disponible en el tier gratuito (límite = 0). ` +
+          `Usa una API Key de Google AI Studio (aistudio.google.com) o habilita la facturación en tu proyecto de Google Cloud.`;
+        retryAfter = undefined; // No point retrying — it won't resolve on its own
+      } else {
+        userMessage = `Cuota de Gemini agotada para el modelo "${model}". Intenta de nuevo en ${retryAfter} segundos.`;
+      }
     } else if (status === 404) {
       userMessage = `El modelo "${model}" no existe o no está disponible con tu API Key. Selecciona otro modelo en Configuración.`;
     } else if (status === 400) {
