@@ -45,6 +45,14 @@ function isTodayKickoff(kickoffTime: string, date: string): boolean {
   return kickoffTime.startsWith(date);
 }
 
+/**
+ * Comprueba si el kickoff ya ha ocurrido (la hora de inicio ya pasó).
+ * Sólo se deben liquidar apuestas cuyo partido ya haya comenzado.
+ */
+function hasKickoffPassed(kickoffTime: string): boolean {
+  return new Date(kickoffTime) <= new Date();
+}
+
 // ---------------------------------------------------------------------------
 // Petición a API-Football (una sola llamada)
 // ---------------------------------------------------------------------------
@@ -114,15 +122,25 @@ function findFixture(
   // 1. Exact match
   if (map.has(exactKey)) return map.get(exactKey);
 
-  // 2. Partial match — iterate entries
+  // 2. Partial match — iterate entries.
+  // Para evitar falsos positivos (ej. "monterrey" coincidiendo con "cf monterrey"
+  // de otra liga), exigimos que la cadena más corta sea al menos el 50 % de la
+  // más larga Y que ambas superen 3 caracteres.
   for (const [key, result] of map.entries()) {
     const [fHome, fAway] = key.split("|");
+
     const homeMatch =
-      fHome.includes(homeKey) ||
-      homeKey.includes(fHome);
+      homeKey.length > 3 &&
+      fHome.length > 3 &&
+      (fHome.includes(homeKey) || homeKey.includes(fHome)) &&
+      Math.min(homeKey.length, fHome.length) / Math.max(homeKey.length, fHome.length) >= 0.5;
+
     const awayMatch =
-      fAway.includes(awayKey) ||
-      awayKey.includes(fAway);
+      awayKey.length > 3 &&
+      fAway.length > 3 &&
+      (fAway.includes(awayKey) || awayKey.includes(fAway)) &&
+      Math.min(awayKey.length, fAway.length) / Math.max(awayKey.length, fAway.length) >= 0.5;
+
     if (homeMatch && awayMatch) return result;
   }
 
@@ -275,8 +293,12 @@ export async function verificarResultadosDelDia(): Promise<VerificationSummary> 
     .from(betsTable)
     .where(eq(betsTable.status, "pending"));
 
-  const todayPending = pendingBets.filter((b) =>
-    isTodayKickoff(b.kickoffTime, date),
+  // Filtrar apuestas de hoy cuyo kickoff ya haya pasado.
+  // Sin este segundo filtro, una apuesta sobre un partido futuro podría
+  // liquidarse erróneamente si hay un partido ya terminado de otra liga
+  // con nombres de equipo similares.
+  const todayPending = pendingBets.filter(
+    (b) => isTodayKickoff(b.kickoffTime, date) && hasKickoffPassed(b.kickoffTime),
   );
 
   logger.info(
