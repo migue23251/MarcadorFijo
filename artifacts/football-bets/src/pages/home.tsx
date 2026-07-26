@@ -39,34 +39,48 @@ const MOCK_ANALYSIS = {
 };
 
 /* ─── Pricing ───────────────────────────────────────────────────────────── */
-const PLANS = {
-  mensual: {
+const PLANS = [
+  {
+    id: "mensual",
     label: "Mensual",
     price: "$39.900",
     period: "/ mes",
     perMonth: 39900,
     savings: null,
-    features: [
-      "Análisis IA ilimitados",
-      "Gestión de bankroll",
-      "Historial completo",
-    ],
+    popular: false,
+    features: ["Análisis IA ilimitados", "Gestión de bankroll", "Historial completo"],
   },
-  anual: {
+  {
+    id: "trimestral",
+    label: "Trimestral",
+    price: "$99.900",
+    period: "/ 3 meses",
+    perMonth: 33300,
+    savings: 17,
+    popular: true,
+    features: ["Análisis IA ilimitados", "Gestión de bankroll", "Historial completo", "Soporte prioritario"],
+  },
+  {
+    id: "semestral",
+    label: "Semestral",
+    price: "$179.900",
+    period: "/ 6 meses",
+    perMonth: 29983,
+    savings: 25,
+    popular: false,
+    features: ["Análisis IA ilimitados", "Gestión de bankroll", "Historial completo", "Soporte prioritario"],
+  },
+  {
+    id: "anual",
     label: "Anual",
     price: "$299.900",
     period: "/ año",
     perMonth: 24992,
     savings: 37,
-    features: [
-      "Análisis IA ilimitados",
-      "Gestión de bankroll",
-      "Historial completo",
-      "Soporte prioritario",
-      "Acceso anticipado a nuevas funciones",
-    ],
+    popular: false,
+    features: ["Análisis IA ilimitados", "Gestión de bankroll", "Historial completo", "Soporte prioritario", "Acceso anticipado a nuevas funciones"],
   },
-};
+];
 
 /* ─── FAQ ────────────────────────────────────────────────────────────────── */
 const FAQ_ITEMS = [
@@ -143,7 +157,6 @@ function ProbBar({ label, value }: { label: string; value: number }) {
 /* ─── Page ──────────────────────────────────────────────────────────────── */
 export default function Home() {
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
-  const [billing, setBilling] = useState<"mensual" | "anual">("anual");
 
   return (
     <div className="min-h-[100dvh] bg-background text-foreground flex flex-col selection:bg-primary/30">
@@ -322,132 +335,77 @@ export default function Home() {
 
         {/* ── Pricing ─────────────────────────────────────────────────────────── */}
         <section className="py-16 px-4 bg-muted/30 border-b border-border">
-          <div className="max-w-2xl mx-auto space-y-10">
+          <div className="max-w-5xl mx-auto space-y-10">
 
             <div className="text-center space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-700">
               <span className="inline-block px-3 py-1 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-semibold uppercase tracking-wider">
                 Planes
               </span>
               <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
-                Elige tu plan
+                Elige tu frecuencia
               </h2>
-
-              {/* Toggle */}
-              <div className="inline-flex items-center gap-1 mt-2 p-1 rounded-lg bg-muted border border-border">
-                <button
-                  type="button"
-                  onClick={() => setBilling("mensual")}
-                  className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${
-                    billing === "mensual"
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Mensual
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setBilling("anual")}
-                  className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${
-                    billing === "anual"
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Anual
-                  <span className="px-1.5 py-0.5 rounded-full bg-primary/15 text-primary text-[10px] font-bold">
-                    −37%
-                  </span>
-                </button>
-              </div>
+              <p className="text-muted-foreground max-w-lg mx-auto text-sm">
+                Todos los planes incluyen acceso completo. A mayor plazo, mayor ahorro.
+              </p>
             </div>
 
-            {/* Two plan cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 animate-in fade-in slide-in-from-bottom-6 duration-700 delay-100">
-
-              {/* Mensual */}
-              <div className={`relative flex flex-col rounded-xl border p-6 transition-all duration-300 ${
-                billing === "mensual"
-                  ? "border-primary bg-primary/5 shadow-lg shadow-primary/10"
-                  : "border-border bg-card"
-              }`}>
-                {billing === "mensual" && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-wider shadow">
-                      <Zap className="w-3 h-3" />
-                      Seleccionado
-                    </span>
-                  </div>
-                )}
-                <p className="text-sm font-semibold text-muted-foreground mb-1">Mensual</p>
-                <div className="flex items-end gap-1 mb-1">
-                  <span className="text-3xl font-black text-foreground">$39.900</span>
-                  <span className="text-xs text-muted-foreground mb-1">COP / mes</span>
-                </div>
-                <p className="text-xs text-muted-foreground mb-5">Sin compromiso. Cancela cuando quieras.</p>
-                <ul className="flex-1 space-y-2 mb-6">
-                  {PLANS.mensual.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-xs text-muted-foreground">
-                      <Check className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  href="/sign-up"
-                  className={`w-full py-2.5 rounded-md text-sm font-semibold text-center transition-all ${
-                    billing === "mensual"
-                      ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                      : "border border-border bg-background hover:border-primary hover:text-primary"
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 animate-in fade-in slide-in-from-bottom-6 duration-700 delay-100">
+              {PLANS.map(({ id, label, price, period, perMonth, savings, popular, features }, i) => (
+                <div
+                  key={id}
+                  className={`relative flex flex-col rounded-xl border p-6 transition-all duration-300 ${
+                    popular
+                      ? "border-primary bg-primary/5 shadow-lg shadow-primary/10"
+                      : "border-border bg-card hover:border-primary/50"
                   }`}
+                  style={{ animationDelay: `${i * 80}ms` }}
                 >
-                  Empezar mensual
-                </Link>
-              </div>
+                  {popular && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-wider shadow">
+                        <Zap className="w-3 h-3" />
+                        Más popular
+                      </span>
+                    </div>
+                  )}
 
-              {/* Anual */}
-              <div className={`relative flex flex-col rounded-xl border p-6 transition-all duration-300 ${
-                billing === "anual"
-                  ? "border-primary bg-primary/5 shadow-lg shadow-primary/10"
-                  : "border-border bg-card"
-              }`}>
-                {billing === "anual" && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-wider shadow">
-                      <Zap className="w-3 h-3" />
-                      Mejor valor
-                    </span>
+                  <div className="mb-4">
+                    <p className="text-sm font-semibold text-muted-foreground mb-1">{label}</p>
+                    <div className="flex items-end gap-1">
+                      <span className="text-2xl font-black text-foreground">{price}</span>
+                      <span className="text-xs text-muted-foreground mb-1">{period}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      ≈ ${Math.round(perMonth).toLocaleString("es-CO")} COP / mes
+                    </p>
+                    {savings && (
+                      <span className="mt-2 inline-block px-2 py-0.5 rounded-full bg-primary/15 text-primary text-[11px] font-bold">
+                        Ahorra {savings}%
+                      </span>
+                    )}
                   </div>
-                )}
-                <p className="text-sm font-semibold text-muted-foreground mb-1">Anual</p>
-                <div className="flex items-end gap-1 mb-1">
-                  <span className="text-3xl font-black text-foreground">$299.900</span>
-                  <span className="text-xs text-muted-foreground mb-1">COP / año</span>
+
+                  <ul className="flex-1 space-y-2 mb-6">
+                    {features.map((f) => (
+                      <li key={f} className="flex items-start gap-2 text-xs text-muted-foreground">
+                        <Check className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <Link
+                    href="/sign-up"
+                    className={`w-full py-2.5 rounded-md text-sm font-semibold text-center transition-all ${
+                      popular
+                        ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                        : "border border-border bg-background hover:border-primary hover:text-primary"
+                    }`}
+                  >
+                    Empezar
+                  </Link>
                 </div>
-                <p className="text-xs text-muted-foreground mb-1">
-                  ≈ $24.992 COP / mes
-                  <span className="ml-2 px-1.5 py-0.5 rounded-full bg-primary/15 text-primary text-[10px] font-bold">Ahorra 37%</span>
-                </p>
-                <p className="text-xs text-muted-foreground mb-5 mt-1">Pago único anual. El mejor precio disponible.</p>
-                <ul className="flex-1 space-y-2 mb-6">
-                  {PLANS.anual.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-xs text-muted-foreground">
-                      <Check className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  href="/sign-up"
-                  className={`w-full py-2.5 rounded-md text-sm font-semibold text-center transition-all ${
-                    billing === "anual"
-                      ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                      : "border border-border bg-background hover:border-primary hover:text-primary"
-                  }`}
-                >
-                  Empezar anual
-                </Link>
-              </div>
+              ))}
             </div>
           </div>
         </section>
