@@ -2,12 +2,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import {
   Radar,
-  Target,
-  TrendingUp,
-  ShieldCheck,
-  ScanSearch,
   BrainCircuit,
-  Wallet,
   AlertTriangle,
   ChevronDown,
   Check,
@@ -43,76 +38,35 @@ const MOCK_ANALYSIS = {
   ],
 };
 
-const STEPS = [
-  {
-    icon: ScanSearch,
-    step: "01",
-    title: "Escanea tus torneos",
-    desc: "Selecciona las ligas y competiciones que sigues. Cubrimos las principales ligas del mundo para que nunca te falte contexto.",
-  },
-  {
-    icon: Target,
-    step: "02",
-    title: "Selecciona el partido",
-    desc: "Elige el encuentro que quieres analizar y deja que los datos hablen. Rastreamos forma reciente, lesiones, H2H y métricas avanzadas en segundos.",
-  },
-  {
-    icon: BrainCircuit,
-    step: "03",
-    title: "Analiza con IA",
-    desc: "Nuestro motor de IA cruza cada variable y calcula el valor esperado real por mercado. Sin narrativas, solo señal cuantitativa y razonamiento explícito.",
-  },
-  {
-    icon: Wallet,
-    step: "04",
-    title: "Gestiona tu Apuesta",
-    desc: "Registra la apuesta, fija el stake y sigue tu ROI, Yield y tasa de acierto en tiempo real. Tu historial es tu ventaja compuesta.",
-  },
-];
-
 /* ─── Pricing ───────────────────────────────────────────────────────────── */
-const PLANS = [
-  {
-    id: "mensual",
+const PLANS = {
+  mensual: {
     label: "Mensual",
     price: "$39.900",
     period: "/ mes",
     perMonth: 39900,
     savings: null,
-    popular: false,
-    features: ["Análisis IA ilimitados", "Gestión de bankroll", "Historial completo"],
+    features: [
+      "Análisis IA ilimitados",
+      "Gestión de bankroll",
+      "Historial completo",
+    ],
   },
-  {
-    id: "trimestral",
-    label: "Trimestral",
-    price: "$99.900",
-    period: "/ 3 meses",
-    perMonth: 33300,
-    savings: 17,
-    popular: true,
-    features: ["Análisis IA ilimitados", "Gestión de bankroll", "Historial completo", "Soporte prioritario"],
-  },
-  {
-    id: "semestral",
-    label: "Semestral",
-    price: "$179.900",
-    period: "/ 6 meses",
-    perMonth: 29983,
-    savings: 25,
-    popular: false,
-    features: ["Análisis IA ilimitados", "Gestión de bankroll", "Historial completo", "Soporte prioritario"],
-  },
-  {
-    id: "anual",
+  anual: {
     label: "Anual",
     price: "$299.900",
     period: "/ año",
     perMonth: 24992,
     savings: 37,
-    popular: false,
-    features: ["Análisis IA ilimitados", "Gestión de bankroll", "Historial completo", "Soporte prioritario", "Acceso anticipado a nuevas funciones"],
+    features: [
+      "Análisis IA ilimitados",
+      "Gestión de bankroll",
+      "Historial completo",
+      "Soporte prioritario",
+      "Acceso anticipado a nuevas funciones",
+    ],
   },
-];
+};
 
 /* ─── FAQ ────────────────────────────────────────────────────────────────── */
 const FAQ_ITEMS = [
@@ -189,6 +143,7 @@ function ProbBar({ label, value }: { label: string; value: number }) {
 /* ─── Page ──────────────────────────────────────────────────────────────── */
 export default function Home() {
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const [billing, setBilling] = useState<"mensual" | "anual">("anual");
 
   return (
     <div className="min-h-[100dvh] bg-background text-foreground flex flex-col selection:bg-primary/30">
@@ -213,11 +168,11 @@ export default function Home() {
       <main className="flex-1 flex flex-col">
 
         {/* ── Hero ────────────────────────────────────────────────────────── */}
-        <section className="relative flex flex-col items-center justify-center px-4 py-24 text-center border-b border-border overflow-hidden">
+        <section className="relative flex flex-col items-center justify-center px-4 pt-20 pb-14 text-center overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(34,197,94,0.15)_0%,transparent_70%)] pointer-events-none" />
 
           <div className="relative z-10 max-w-3xl mx-auto space-y-6">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-semibold uppercase tracking-wider mb-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-semibold uppercase tracking-wider mb-2 animate-in fade-in slide-in-from-bottom-4 duration-700">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
@@ -236,7 +191,7 @@ export default function Home() {
               Analiza partidos en tiempo real, encuentra valor en el mercado y gestiona tu bankroll como un profesional. Nada de juegos, solo rendimiento.
             </p>
 
-            <div className="pt-8 flex flex-col sm:flex-row items-center justify-center gap-4 animate-in fade-in slide-in-from-bottom-6 duration-700 delay-300">
+            <div className="pt-6 flex flex-col sm:flex-row items-center justify-center gap-4 animate-in fade-in slide-in-from-bottom-6 duration-700 delay-300">
               <Link href="/sign-up" className="w-full sm:w-auto px-8 py-3 bg-primary text-primary-foreground font-semibold rounded-md hover:bg-primary/90 transition-all flex items-center justify-center gap-2 group">
                 <Radar className="w-5 h-5 group-hover:rotate-12 transition-transform" />
                 Desplegar Radar
@@ -245,50 +200,20 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ── Features ────────────────────────────────────────────────────── */}
-        <section className="py-24 px-4 bg-background border-b border-border">
-          <div className="max-w-5xl mx-auto">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <div className="p-6 border border-border rounded-lg bg-card hover:border-primary/50 transition-colors">
-                <Target className="w-10 h-10 text-primary mb-4" />
-                <h3 className="text-xl font-semibold mb-2 text-foreground">Análisis de Precisión</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">
-                  Escaneo completo de métricas por partido usando modelos de IA avanzados para encontrar apuestas de alto valor en mercados desatendidos.
-                </p>
-              </div>
-              <div className="p-6 border border-border rounded-lg bg-card hover:border-primary/50 transition-colors">
-                <TrendingUp className="w-10 h-10 text-primary mb-4" />
-                <h3 className="text-xl font-semibold mb-2 text-foreground">Gestión de Bankroll</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">
-                  Registro riguroso de cada movimiento. Calcula ROI, Yield y tasa de acierto en tiempo real como un terminal de trading.
-                </p>
-              </div>
-              <div className="p-6 border border-border rounded-lg bg-card hover:border-primary/50 transition-colors">
-                <ShieldCheck className="w-10 h-10 text-primary mb-4" />
-                <h3 className="text-xl font-semibold mb-2 text-foreground">Disciplina Operativa</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">
-                  No es un casino. Es una herramienta para mantener la sangre fría, basar decisiones en datos y ejecutar con confianza.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
         {/* ── Mockup Section ──────────────────────────────────────────────── */}
-        <section className="relative py-24 px-4 bg-background border-b border-border overflow-hidden">
+        <section className="relative py-16 px-4 bg-background border-b border-border overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_center,rgba(34,197,94,0.08)_0%,transparent_65%)] pointer-events-none" />
 
-          <div className="relative z-10 max-w-5xl mx-auto space-y-10">
-            {/* Section header */}
-            <div className="text-center space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-700">
+          <div className="relative z-10 max-w-5xl mx-auto space-y-8">
+            <div className="text-center space-y-2 animate-in fade-in slide-in-from-bottom-4 duration-700">
               <span className="inline-block px-3 py-1 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-semibold uppercase tracking-wider">
                 Dashboard en Acción
               </span>
-              <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
+              <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">
                 Así trabaja el motor de análisis
               </h2>
-              <p className="text-muted-foreground max-w-xl mx-auto text-sm md:text-base">
-                Una vista real del informe que genera la IA para cada partido. Sin ambigüedades, con razonamiento cuantitativo y recomendación accionable.
+              <p className="text-muted-foreground max-w-xl mx-auto text-sm">
+                Un informe real generado por IA: probabilidades, valor esperado y recomendación accionable. Sin narrativas, solo datos.
               </p>
             </div>
 
@@ -395,139 +320,141 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ── How It Works ────────────────────────────────────────────────── */}
-        <section className="py-24 px-4 bg-muted/30 border-b border-border">
-          <div className="max-w-5xl mx-auto space-y-12">
-            <div className="text-center space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-700">
-              <span className="inline-block px-3 py-1 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-semibold uppercase tracking-wider">
-                El Proceso
-              </span>
-              <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
-                Cómo funciona
-              </h2>
-              <p className="text-muted-foreground max-w-lg mx-auto text-sm md:text-base">
-                Tres pasos para pasar de un partido en cartelera a una decisión fundamentada en datos.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {STEPS.map(({ icon: Icon, step, title, desc }, i) => (
-                <div
-                  key={step}
-                  className={`relative p-6 rounded-xl border border-border bg-card hover:border-primary/50 transition-all duration-300 group animate-in fade-in slide-in-from-bottom-6 duration-700`}
-                  style={{ animationDelay: `${i * 100}ms` }}
-                >
-                  {/* Step connector line (desktop) */}
-                  {i < STEPS.length - 1 && (
-                    <div className="hidden md:block absolute top-10 -right-3 w-6 h-px bg-border z-10" />
-                  )}
-
-                  <div className="flex items-start gap-4 mb-4">
-                    <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                      <Icon className="w-5 h-5 text-primary" />
-                    </div>
-                    <span className="text-4xl font-black text-muted/40 leading-none select-none">{step}</span>
-                  </div>
-
-                  <h3 className="text-lg font-bold text-foreground mb-2">{title}</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{desc}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex justify-center animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300">
-              <Link
-                href="/sign-up"
-                className="px-8 py-3 bg-primary text-primary-foreground font-semibold rounded-md hover:bg-primary/90 transition-all flex items-center gap-2 group"
-              >
-                <Radar className="w-5 h-5 group-hover:rotate-12 transition-transform" />
-                Empezar gratis
-              </Link>
-            </div>
-          </div>
-        </section>
-
         {/* ── Pricing ─────────────────────────────────────────────────────────── */}
-        <section className="py-24 px-4 bg-background border-b border-border">
-          <div className="max-w-5xl mx-auto space-y-12">
+        <section className="py-16 px-4 bg-muted/30 border-b border-border">
+          <div className="max-w-2xl mx-auto space-y-10">
+
             <div className="text-center space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-700">
               <span className="inline-block px-3 py-1 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-semibold uppercase tracking-wider">
                 Planes
               </span>
               <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
-                Elige tu frecuencia
+                Elige tu plan
               </h2>
-              <p className="text-muted-foreground max-w-lg mx-auto text-sm md:text-base">
-                Todos los planes incluyen acceso completo. A mayor plazo, mayor ahorro.
-              </p>
+
+              {/* Toggle */}
+              <div className="inline-flex items-center gap-1 mt-2 p-1 rounded-lg bg-muted border border-border">
+                <button
+                  type="button"
+                  onClick={() => setBilling("mensual")}
+                  className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${
+                    billing === "mensual"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Mensual
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBilling("anual")}
+                  className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${
+                    billing === "anual"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Anual
+                  <span className="px-1.5 py-0.5 rounded-full bg-primary/15 text-primary text-[10px] font-bold">
+                    −37%
+                  </span>
+                </button>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-              {PLANS.map(({ id, label, price, period, perMonth, savings, popular, features }, i) => (
-                <div
-                  key={id}
-                  className={`relative flex flex-col rounded-xl border p-6 transition-all duration-300 animate-in fade-in slide-in-from-bottom-6 duration-700 ${
-                    popular
-                      ? "border-primary bg-primary/5 shadow-lg shadow-primary/10"
-                      : "border-border bg-card hover:border-primary/50"
-                  }`}
-                  style={{ animationDelay: `${i * 80}ms` }}
-                >
-                  {popular && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-wider shadow">
-                        <Zap className="w-3 h-3" />
-                        Más popular
-                      </span>
-                    </div>
-                  )}
+            {/* Two plan cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 animate-in fade-in slide-in-from-bottom-6 duration-700 delay-100">
 
-                  <div className="mb-4">
-                    <p className="text-sm font-semibold text-muted-foreground mb-1">{label}</p>
-                    <div className="flex items-end gap-1">
-                      <span className="text-2xl font-black text-foreground">{price}</span>
-                      <span className="text-xs text-muted-foreground mb-1">{period}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      ≈ ${Math.round(perMonth / 100) * 100 === perMonth
-                        ? perMonth.toLocaleString("es-CO")
-                        : Math.round(perMonth).toLocaleString("es-CO")} COP / mes
-                    </p>
-                    {savings && (
-                      <span className="mt-2 inline-block px-2 py-0.5 rounded-full bg-primary/15 text-primary text-[11px] font-bold">
-                        Ahorra {savings}%
-                      </span>
-                    )}
+              {/* Mensual */}
+              <div className={`relative flex flex-col rounded-xl border p-6 transition-all duration-300 ${
+                billing === "mensual"
+                  ? "border-primary bg-primary/5 shadow-lg shadow-primary/10"
+                  : "border-border bg-card"
+              }`}>
+                {billing === "mensual" && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-wider shadow">
+                      <Zap className="w-3 h-3" />
+                      Seleccionado
+                    </span>
                   </div>
-
-                  <ul className="flex-1 space-y-2 mb-6">
-                    {features.map((f) => (
-                      <li key={f} className="flex items-start gap-2 text-xs text-muted-foreground">
-                        <Check className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
-
-                  <Link
-                    href="/sign-up"
-                    className={`w-full py-2.5 rounded-md text-sm font-semibold text-center transition-all ${
-                      popular
-                        ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                        : "border border-border bg-background hover:border-primary hover:text-primary"
-                    }`}
-                  >
-                    Empezar
-                  </Link>
+                )}
+                <p className="text-sm font-semibold text-muted-foreground mb-1">Mensual</p>
+                <div className="flex items-end gap-1 mb-1">
+                  <span className="text-3xl font-black text-foreground">$39.900</span>
+                  <span className="text-xs text-muted-foreground mb-1">COP / mes</span>
                 </div>
-              ))}
+                <p className="text-xs text-muted-foreground mb-5">Sin compromiso. Cancela cuando quieras.</p>
+                <ul className="flex-1 space-y-2 mb-6">
+                  {PLANS.mensual.features.map((f) => (
+                    <li key={f} className="flex items-start gap-2 text-xs text-muted-foreground">
+                      <Check className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href="/sign-up"
+                  className={`w-full py-2.5 rounded-md text-sm font-semibold text-center transition-all ${
+                    billing === "mensual"
+                      ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                      : "border border-border bg-background hover:border-primary hover:text-primary"
+                  }`}
+                >
+                  Empezar mensual
+                </Link>
+              </div>
+
+              {/* Anual */}
+              <div className={`relative flex flex-col rounded-xl border p-6 transition-all duration-300 ${
+                billing === "anual"
+                  ? "border-primary bg-primary/5 shadow-lg shadow-primary/10"
+                  : "border-border bg-card"
+              }`}>
+                {billing === "anual" && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-wider shadow">
+                      <Zap className="w-3 h-3" />
+                      Mejor valor
+                    </span>
+                  </div>
+                )}
+                <p className="text-sm font-semibold text-muted-foreground mb-1">Anual</p>
+                <div className="flex items-end gap-1 mb-1">
+                  <span className="text-3xl font-black text-foreground">$299.900</span>
+                  <span className="text-xs text-muted-foreground mb-1">COP / año</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-1">
+                  ≈ $24.992 COP / mes
+                  <span className="ml-2 px-1.5 py-0.5 rounded-full bg-primary/15 text-primary text-[10px] font-bold">Ahorra 37%</span>
+                </p>
+                <p className="text-xs text-muted-foreground mb-5 mt-1">Pago único anual. El mejor precio disponible.</p>
+                <ul className="flex-1 space-y-2 mb-6">
+                  {PLANS.anual.features.map((f) => (
+                    <li key={f} className="flex items-start gap-2 text-xs text-muted-foreground">
+                      <Check className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href="/sign-up"
+                  className={`w-full py-2.5 rounded-md text-sm font-semibold text-center transition-all ${
+                    billing === "anual"
+                      ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                      : "border border-border bg-background hover:border-primary hover:text-primary"
+                  }`}
+                >
+                  Empezar anual
+                </Link>
+              </div>
             </div>
           </div>
         </section>
 
         {/* ── FAQ ─────────────────────────────────────────────────────────────── */}
-        <section className="py-24 px-4 bg-muted/30 border-b border-border">
-          <div className="max-w-2xl mx-auto space-y-10">
+        <section className="py-16 px-4 bg-background border-b border-border">
+          <div className="max-w-2xl mx-auto space-y-8">
             <div className="text-center space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-700">
               <span className="inline-block px-3 py-1 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-semibold uppercase tracking-wider">
                 FAQ
