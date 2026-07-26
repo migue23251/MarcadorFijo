@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { 
   useGetMe, 
   getGetMeQueryKey, 
@@ -13,8 +13,10 @@ import {
 import { Redirect } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { Shield, Users, Loader2, RefreshCw, CheckCircle2, XCircle, AlertTriangle, HelpCircle, Cpu } from "lucide-react";
+import { Shield, Users, Loader2, RefreshCw, CheckCircle2, XCircle, AlertTriangle, HelpCircle, Cpu, ChevronLeft, ChevronRight, Search, UserRound, UserRoundCog } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 
 export default function Admin() {
   const { data: me, isLoading: meLoading } = useGetMe({ query: { queryKey: getGetMeQueryKey() } });
@@ -143,6 +145,49 @@ function AnalysisEnginePanel() {
 
 function AdminPanel() {
   const { data: users, isLoading } = useListUsers({ query: { queryKey: getListUsersQueryKey() } });
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "user">("all");
+  const [subscriptionFilter, setSubscriptionFilter] = useState<"all" | "active" | "inactive">("all");
+  const [page, setPage] = useState(1);
+
+  const pageSize = 8;
+  const filteredUsers = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+    return (users ?? []).filter((user) => {
+      const matchesSearch =
+        !normalizedSearch ||
+        user.name?.toLowerCase().includes(normalizedSearch) ||
+        user.email.toLowerCase().includes(normalizedSearch);
+      const matchesRole = roleFilter === "all" || user.role === roleFilter;
+      const matchesSubscription =
+        subscriptionFilter === "all" ||
+        (subscriptionFilter === "active" ? user.isSubscriptionActive : !user.isSubscriptionActive);
+
+      return matchesSearch && matchesRole && matchesSubscription;
+    });
+  }, [roleFilter, search, subscriptionFilter, users]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const visibleUsers = filteredUsers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  const updateSearch = (value: string) => {
+    setSearch(value);
+    setPage(1);
+  };
+
+  const updateRoleFilter = (value: "all" | "admin" | "user") => {
+    setRoleFilter(value);
+    setPage(1);
+  };
+
+  const updateSubscriptionFilter = (value: "all" | "active" | "inactive") => {
+    setSubscriptionFilter(value);
+    setPage(1);
+  };
+
+  const activeUsers = users?.filter((user) => user.isSubscriptionActive).length ?? 0;
+  const adminUsers = users?.filter((user) => user.role === "admin").length ?? 0;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -154,9 +199,10 @@ function AdminPanel() {
           </div>
           <p className="text-muted-foreground">Gestión de usuarios y accesos.</p>
         </div>
-        <div className="bg-card px-4 py-2 rounded-md border border-border flex items-center gap-3 self-start sm:self-auto">
-          <Users className="w-4 h-4 text-muted-foreground" />
-          <span className="font-semibold text-foreground">{users?.length || 0} Operadores</span>
+        <div className="grid grid-cols-3 gap-2 self-start sm:self-auto">
+          <AdminMetric icon={Users} value={users?.length ?? 0} label="Usuarios" />
+          <AdminMetric icon={CheckCircle2} value={activeUsers} label="Activos" tone="success" />
+          <AdminMetric icon={UserRoundCog} value={adminUsers} label="Admins" tone="purple" />
         </div>
       </header>
 
@@ -164,40 +210,130 @@ function AdminPanel() {
       <ResultVerificationPanel />
       <AnalysisEnginePanel />
 
-      <div className="bg-card border border-border rounded-xl overflow-hidden">
+      <section className="bg-card border border-border rounded-xl overflow-hidden">
+        <div className="p-5 border-b border-border bg-secondary/20 space-y-4">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-lg font-bold tracking-tight">Directorio de usuarios</h2>
+              <p className="text-sm text-muted-foreground">
+                Busca y gestiona accesos sin recorrer toda la lista.
+              </p>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              {filteredUsers.length} resultado{filteredUsers.length === 1 ? "" : "s"}
+            </span>
+          </div>
+
+          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_170px_190px]">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(event) => updateSearch(event.target.value)}
+                placeholder="Buscar por nombre o correo…"
+                aria-label="Buscar usuarios"
+                className="h-10 bg-background pl-9"
+              />
+            </div>
+            <select
+              value={roleFilter}
+              onChange={(event) => updateRoleFilter(event.target.value as typeof roleFilter)}
+              aria-label="Filtrar por rol"
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            >
+              <option value="all">Todos los roles</option>
+              <option value="admin">Administradores</option>
+              <option value="user">Operadores</option>
+            </select>
+            <select
+              value={subscriptionFilter}
+              onChange={(event) => updateSubscriptionFilter(event.target.value as typeof subscriptionFilter)}
+              aria-label="Filtrar por suscripción"
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            >
+              <option value="all">Todos los accesos</option>
+              <option value="active">Suscripción activa</option>
+              <option value="inactive">Sin suscripción activa</option>
+            </select>
+          </div>
+        </div>
+
         {isLoading ? (
           <div className="p-12 text-center text-muted-foreground">Cargando usuarios...</div>
-        ) : !users || users.length === 0 ? (
-          <div className="p-12 text-center text-muted-foreground">No hay usuarios registrados.</div>
+        ) : filteredUsers.length === 0 ? (
+          <div className="p-12 text-center">
+            <UserRound className="mx-auto mb-3 h-8 w-8 text-muted-foreground/60" />
+            <p className="font-medium text-foreground">No encontramos usuarios</p>
+            <p className="mt-1 text-sm text-muted-foreground">Prueba con otra búsqueda o cambia los filtros.</p>
+          </div>
         ) : (
           <>
-            {/* Desktop table */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs text-muted-foreground uppercase tracking-wider bg-secondary/50 border-b border-border">
-                  <tr>
-                    <th className="px-6 py-4 font-semibold">Operador</th>
-                    <th className="px-6 py-4 font-semibold">Rol</th>
-                    <th className="px-6 py-4 font-semibold text-right">Suscripción</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {users.map(user => (
-                    <UserRow key={user.clerkId} user={user} />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Mobile cards */}
-            <div className="md:hidden divide-y divide-border">
-              {users.map(user => (
-                <UserCard key={user.clerkId} user={user} />
+            <div className="divide-y divide-border">
+              {visibleUsers.map((user) => (
+                <UserRow key={user.clerkId} user={user} />
               ))}
+            </div>
+            <div className="flex flex-col gap-3 border-t border-border px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-muted-foreground">
+                Mostrando {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filteredUsers.length)} de {filteredUsers.length}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((value) => Math.max(1, value - 1))}
+                  disabled={currentPage === 1}
+                  className="inline-flex h-8 items-center gap-1 rounded-md border border-border px-2.5 text-xs font-medium transition-colors hover:bg-secondary disabled:pointer-events-none disabled:opacity-40"
+                  aria-label="Página anterior"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                  Anterior
+                </button>
+                <span className="min-w-16 text-center text-xs font-semibold text-foreground">
+                  {currentPage} / {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+                  disabled={currentPage === totalPages}
+                  className="inline-flex h-8 items-center gap-1 rounded-md border border-border px-2.5 text-xs font-medium transition-colors hover:bg-secondary disabled:pointer-events-none disabled:opacity-40"
+                  aria-label="Página siguiente"
+                >
+                  Siguiente
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
           </>
         )}
+      </section>
+    </div>
+  );
+}
+
+function AdminMetric({
+  icon: Icon,
+  value,
+  label,
+  tone = "neutral",
+}: {
+  icon: typeof Users;
+  value: number;
+  label: string;
+  tone?: "neutral" | "success" | "purple";
+}) {
+  const toneClasses = {
+    neutral: "text-muted-foreground",
+    success: "text-emerald-500",
+    purple: "text-purple-500",
+  };
+
+  return (
+    <div className="min-w-[86px] rounded-lg border border-border bg-card px-3 py-2">
+      <div className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider ${toneClasses[tone]}`}>
+        <Icon className="h-3.5 w-3.5" />
+        {label}
       </div>
+      <p className="mt-0.5 text-lg font-bold text-foreground">{value}</p>
     </div>
   );
 }
@@ -287,75 +423,51 @@ function UserRow({ user }: { user: UserProfile }) {
   const isPending = updateSubscription.isPending;
 
   return (
-    <tr className="hover:bg-secondary/20 transition-colors">
-      <td className="px-6 py-4">
-        <div className="flex flex-col">
-          <span className="font-bold text-foreground">{user.name || "Sin nombre"}</span>
-          <span className="text-xs text-muted-foreground font-mono mt-0.5">{user.email}</span>
-        </div>
-      </td>
-      <td className="px-6 py-4">
-        <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider ${
-          user.role === "admin" 
-            ? "bg-purple-500/20 text-purple-400 border border-purple-500/30" 
-            : "bg-secondary text-muted-foreground border border-border"
-        }`}>
-          {user.role}
-        </span>
-      </td>
-      <td className="px-6 py-4 text-right">
-        <SubscriptionToggle active={user.activeSubscription} isPending={isPending} onToggle={handleToggle} />
-      </td>
-    </tr>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Mobile: card
-// ---------------------------------------------------------------------------
-
-function UserCard({ user }: { user: UserProfile }) {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const updateSubscription = useUpdateUserSubscription();
-
-  const handleToggle = () => {
-    updateSubscription.mutate({
-      userId: user.clerkId,
-      data: { activeSubscription: !user.activeSubscription }
-    }, {
-      onSuccess: () => {
-        toast({ title: "Suscripción actualizada", description: `Acceso ${!user.activeSubscription ? 'concedido' : 'revocado'} para ${user.email}` });
-        queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
-      },
-      onError: () => {
-        toast({ title: "Error", description: "No se pudo actualizar el estado.", variant: "destructive" });
-      }
-    });
-  };
-
-  const isPending = updateSubscription.isPending;
-
-  return (
-    <div className="flex items-center justify-between p-4 gap-3 hover:bg-secondary/20 transition-colors">
-      <div className="flex flex-col min-w-0">
-        <span className="font-bold text-foreground truncate">{user.name || "Sin nombre"}</span>
-        <span className="text-xs text-muted-foreground font-mono truncate">{user.email}</span>
-        <span className={`mt-1.5 self-start px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider ${
-          user.role === "admin"
-            ? "bg-purple-500/20 text-purple-400 border border-purple-500/30"
-            : "bg-secondary text-muted-foreground border border-border"
-        }`}>
-          {user.role}
-        </span>
+    <div className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-secondary/20">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+        {(user.name || user.email).slice(0, 1).toUpperCase()}
       </div>
-      <div className="flex flex-col items-end gap-1 shrink-0">
-        <span className="text-xs text-muted-foreground mb-1">
-          {user.activeSubscription ? "Activa" : "Inactiva"}
-        </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="truncate text-sm font-bold text-foreground">{user.name || "Sin nombre"}</span>
+          <UserRoleBadge role={user.role} />
+        </div>
+        <span className="block truncate text-xs text-muted-foreground">{user.email}</span>
+      </div>
+      <div className="hidden shrink-0 items-center gap-2 sm:flex">
+        <SubscriptionBadge active={user.isSubscriptionActive} />
+        <span className="text-xs text-muted-foreground">{user.subscriptionPlan}</span>
+      </div>
+      <div className="shrink-0">
         <SubscriptionToggle active={user.activeSubscription} isPending={isPending} onToggle={handleToggle} />
       </div>
     </div>
+  );
+}
+
+function UserRoleBadge({ role }: { role: UserProfile["role"] }) {
+  return (
+    <Badge
+      variant="outline"
+      className={role === "admin"
+        ? "border-purple-500/30 bg-purple-500/10 px-1.5 py-0 text-[10px] uppercase tracking-wider text-purple-500"
+        : "px-1.5 py-0 text-[10px] uppercase tracking-wider text-muted-foreground"}
+    >
+      {role === "admin" ? "admin" : "operador"}
+    </Badge>
+  );
+}
+
+function SubscriptionBadge({ active }: { active: boolean }) {
+  return (
+    <Badge
+      variant="outline"
+      className={active
+        ? "border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0 text-[10px] text-emerald-600 dark:text-emerald-400"
+        : "px-1.5 py-0 text-[10px] text-muted-foreground"}
+    >
+      {active ? "Activa" : "Inactiva"}
+    </Badge>
   );
 }
 
