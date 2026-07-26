@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, doublePrecision } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, doublePrecision, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -13,6 +13,7 @@ export const betsTable = pgTable("bets", {
   selection: text("selection").notNull(),
   odds: doublePrecision("odds").notNull(),
   stake: doublePrecision("stake").notNull(),
+  fixtureId: integer("fixture_id"), // API-Football fixture ID for exact result matching
   status: text("status").notNull().default("pending"), // "pending" | "won" | "lost" | "void"
   returnAmount: doublePrecision("return_amount"),
   finalScore: text("final_score"), // e.g. "2-1"

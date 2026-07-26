@@ -22,8 +22,10 @@ interface FixtureResult {
   statusShort: string;
 }
 
-// Clave: "<homeTeam_lower>|<awayTeam_lower>"
+// Clave por nombre: "<homeTeam_lower>|<awayTeam_lower>"
 type FixtureMap = Map<string, FixtureResult>;
+// Clave por ID de API-Football
+type FixtureIdMap = Map<number, FixtureResult>;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -65,7 +67,12 @@ function getApiFootballKeys(): string[] {
   ].filter((k): k is string => Boolean(k));
 }
 
-async function fetchFinishedFixtures(date: string): Promise<FixtureMap> {
+interface FinishedFixtures {
+  byName: FixtureMap;
+  byId: FixtureIdMap;
+}
+
+async function fetchFinishedFixtures(date: string): Promise<FinishedFixtures> {
   const keys = getApiFootballKeys();
   if (keys.length === 0) {
     throw new Error("No API-Football keys configuradas (API_FOOTBALL_KEY_1 / FOOTBALL_API_KEY)");
@@ -88,21 +95,27 @@ async function fetchFinishedFixtures(date: string): Promise<FixtureMap> {
 
   logger.info({ date, count: fixtures.length }, "Finished fixtures received");
 
-  const map: FixtureMap = new Map();
+  const byName: FixtureMap = new Map();
+  const byId: FixtureIdMap = new Map();
 
   for (const f of fixtures) {
     const homeName = normalize(f.teams?.home?.name ?? "");
     const awayName = normalize(f.teams?.away?.name ?? "");
     if (!homeName || !awayName) continue;
 
-    map.set(`${homeName}|${awayName}`, {
+    const result: FixtureResult = {
       homeScore: f.goals?.home ?? 0,
       awayScore: f.goals?.away ?? 0,
       statusShort: f.fixture?.status?.short ?? "FT",
-    });
+    };
+
+    byName.set(`${homeName}|${awayName}`, result);
+
+    const fixtureId: number | undefined = f.fixture?.id;
+    if (fixtureId) byId.set(fixtureId, result);
   }
 
-  return map;
+  return { byName, byId };
 }
 
 /**
@@ -285,7 +298,7 @@ export async function verificarResultadosDelDia(): Promise<VerificationSummary> 
   logger.info({ date }, "Iniciando verificación de resultados del día");
 
   // 1. Obtener resultados finales de API-Football (1 sola llamada)
-  const fixtureMap = await fetchFinishedFixtures(date);
+  const { byName: fixtureMap, byId: fixtureIdMap } = await fetchFinishedFixtures(date);
 
   // 2. Consultar apuestas pendientes cuyo kickoff sea hoy
   const pendingBets = await db
@@ -319,7 +332,24 @@ export async function verificarResultadosDelDia(): Promise<VerificationSummary> 
 
   // 3. Evaluar cada apuesta
   for (const bet of todayPending) {
-    const fixture = findFixture(fixtureMap, bet.homeTeam, bet.awayTeam);
+    // Priorizar búsqueda por ID exacto de API-Football para evitar
+    // falsos positivos por coincidencia de nombre entre ligas distintas.
+    // Si la apuesta tiene fixtureId pero no está en los resultados
+    // finalizados, el partido aún no terminó → dejar pendiente.
+    let fixture: FixtureResult | undefined;
+    if (bet.fixtureId) {
+      fixture = fixtureIdMap.get(bet.fixtureId);
+      if (!fixture) {
+        logger.info(
+          { betId: bet.id, fixtureId: bet.fixtureId },
+          "Partido con fixtureId aún no finalizado — apuesta sin resolver",
+        );
+        summary.notMatched++;
+        continue;
+      }
+    } else {
+      fixture = findFixture(fixtureMap, bet.homeTeam, bet.awayTeam);
+    }
 
     if (!fixture) {
       logger.warn(

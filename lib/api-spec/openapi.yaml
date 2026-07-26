@@ -626,6 +626,9 @@ components:
           enum: [pending, won, lost, void]
         returnAmount:
           type: ["number", "null"]
+        fixtureId:
+          type: ["integer", "null"]
+          description: API-Football fixture ID for exact result matching
         notes:
           type: ["string", "null"]
         createdAt:
@@ -661,6 +664,9 @@ components:
           type: number
         stake:
           type: number
+        fixtureId:
+          type: integer
+          description: API-Football fixture ID for exact result matching
         notes:
           type: string
 

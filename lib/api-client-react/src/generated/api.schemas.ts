@@ -169,6 +169,11 @@ export interface Bet {
   status: BetStatus;
   /** @nullable */
   returnAmount?: number | null;
+  /**
+     * API-Football fixture ID for exact result matching
+     * @nullable
+     */
+  fixtureId?: number | null;
   /** @nullable */
   notes?: string | null;
   createdAt: string;
@@ -184,6 +189,8 @@ export interface BetInput {
   selection: string;
   odds: number;
   stake: number;
+  /** API-Football fixture ID for exact result matching */
+  fixtureId?: number;
   notes?: string;
 }
 

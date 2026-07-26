@@ -15,5 +15,7 @@ export interface BetInput {
   selection: string;
   odds: number;
   stake: number;
+  /** API-Football fixture ID for exact result matching */
+  fixtureId?: number;
   notes?: string;
 }

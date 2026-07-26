@@ -236,6 +236,7 @@ export const ListBetsResponseItem = zod.object({
   "stake": zod.number(),
   "status": zod.enum(['pending', 'won', 'lost', 'void']),
   "returnAmount": zod.number().nullish(),
+  "fixtureId": zod.number().nullish().describe('API-Football fixture ID for exact result matching'),
   "notes": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string().optional()
@@ -255,6 +256,7 @@ export const CreateBetBody = zod.object({
   "selection": zod.string(),
   "odds": zod.number(),
   "stake": zod.number(),
+  "fixtureId": zod.number().optional().describe('API-Football fixture ID for exact result matching'),
   "notes": zod.string().optional()
 })
 
@@ -270,6 +272,7 @@ export const CreateBetResponse = zod.object({
   "stake": zod.number(),
   "status": zod.enum(['pending', 'won', 'lost', 'void']),
   "returnAmount": zod.number().nullish(),
+  "fixtureId": zod.number().nullish().describe('API-Football fixture ID for exact result matching'),
   "notes": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string().optional()
@@ -310,6 +313,7 @@ export const GetBetResponse = zod.object({
   "stake": zod.number(),
   "status": zod.enum(['pending', 'won', 'lost', 'void']),
   "returnAmount": zod.number().nullish(),
+  "fixtureId": zod.number().nullish().describe('API-Football fixture ID for exact result matching'),
   "notes": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string().optional()
@@ -341,6 +345,7 @@ export const UpdateBetResponse = zod.object({
   "stake": zod.number(),
   "status": zod.enum(['pending', 'won', 'lost', 'void']),
   "returnAmount": zod.number().nullish(),
+  "fixtureId": zod.number().nullish().describe('API-Football fixture ID for exact result matching'),
   "notes": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string().optional()
