@@ -153,6 +153,7 @@ export const BetStatus = {
   pending: 'pending',
   won: 'won',
   lost: 'lost',
+  void: 'void',
 } as const;
 
 export interface Bet {
@@ -193,6 +194,7 @@ export const BetUpdateStatus = {
   pending: 'pending',
   won: 'won',
   lost: 'lost',
+  void: 'void',
 } as const;
 
 export interface BetUpdate {
@@ -229,5 +231,6 @@ export const ListBetsStatus = {
   pending: 'pending',
   won: 'won',
   lost: 'lost',
+  void: 'void',
 } as const;
 

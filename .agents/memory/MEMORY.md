@@ -1,2 +1,3 @@
 - [Imported Clerk setup](clerk-import-setup.md) — preserve external auth credentials and keep public pages usable when auth setup is deferred.
 - [Subscription state](subscription-state.md) — treat the expiry timestamp as the source of truth for active access while preserving legacy flags during rollout.
+- [Bet status contract](bet-status-contract.md) — keep API enums aligned with persisted bet statuses, including voided bets.

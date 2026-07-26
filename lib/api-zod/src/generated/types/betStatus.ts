@@ -13,4 +13,5 @@ export const BetStatus = {
   pending: 'pending',
   won: 'won',
   lost: 'lost',
+  void: 'void',
 } as const;

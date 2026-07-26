@@ -221,7 +221,7 @@ export const AnalyzeMatchResponse = zod.object({
  * @summary List all bets for the current user
  */
 export const ListBetsQueryParams = zod.object({
-  "status": zod.enum(['pending', 'won', 'lost']).optional()
+  "status": zod.enum(['pending', 'won', 'lost', 'void']).optional()
 })
 
 export const ListBetsResponseItem = zod.object({
@@ -234,7 +234,7 @@ export const ListBetsResponseItem = zod.object({
   "selection": zod.string(),
   "odds": zod.number(),
   "stake": zod.number(),
-  "status": zod.enum(['pending', 'won', 'lost']),
+  "status": zod.enum(['pending', 'won', 'lost', 'void']),
   "returnAmount": zod.number().nullish(),
   "notes": zod.string().nullish(),
   "createdAt": zod.string(),
@@ -268,7 +268,7 @@ export const CreateBetResponse = zod.object({
   "selection": zod.string(),
   "odds": zod.number(),
   "stake": zod.number(),
-  "status": zod.enum(['pending', 'won', 'lost']),
+  "status": zod.enum(['pending', 'won', 'lost', 'void']),
   "returnAmount": zod.number().nullish(),
   "notes": zod.string().nullish(),
   "createdAt": zod.string(),
@@ -308,7 +308,7 @@ export const GetBetResponse = zod.object({
   "selection": zod.string(),
   "odds": zod.number(),
   "stake": zod.number(),
-  "status": zod.enum(['pending', 'won', 'lost']),
+  "status": zod.enum(['pending', 'won', 'lost', 'void']),
   "returnAmount": zod.number().nullish(),
   "notes": zod.string().nullish(),
   "createdAt": zod.string(),
@@ -324,7 +324,7 @@ export const UpdateBetParams = zod.object({
 })
 
 export const UpdateBetBody = zod.object({
-  "status": zod.enum(['pending', 'won', 'lost']).optional(),
+  "status": zod.enum(['pending', 'won', 'lost', 'void']).optional(),
   "returnAmount": zod.number().optional(),
   "notes": zod.string().optional()
 })
@@ -339,7 +339,7 @@ export const UpdateBetResponse = zod.object({
   "selection": zod.string(),
   "odds": zod.number(),
   "stake": zod.number(),
-  "status": zod.enum(['pending', 'won', 'lost']),
+  "status": zod.enum(['pending', 'won', 'lost', 'void']),
   "returnAmount": zod.number().nullish(),
   "notes": zod.string().nullish(),
   "createdAt": zod.string(),

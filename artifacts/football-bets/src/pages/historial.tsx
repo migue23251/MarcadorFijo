@@ -83,6 +83,7 @@ export default function Historial() {
           <FilterButton active={statusFilter === "pending"} onClick={() => setStatusFilter("pending")}>Pendientes</FilterButton>
           <FilterButton active={statusFilter === "won"} onClick={() => setStatusFilter("won")}>Ganadas</FilterButton>
           <FilterButton active={statusFilter === "lost"} onClick={() => setStatusFilter("lost")}>Perdidas</FilterButton>
+          <FilterButton active={statusFilter === "void"} onClick={() => setStatusFilter("void")}>Anuladas</FilterButton>
         </div>
 
         {/* Content */}
@@ -226,18 +227,21 @@ function BetRow({ bet, currency }: { bet: Bet; currency: string }) {
     pending: "bg-secondary text-muted-foreground border-border",
     won: "bg-emerald-500/20 text-emerald-500 border-emerald-500/30",
     lost: "bg-red-500/20 text-red-500 border-red-500/30",
+    void: "bg-amber-500/20 text-amber-500 border-amber-500/30",
   };
 
   const statusIcons = {
     pending: <Clock className="w-3 h-3 mr-1 inline" />,
     won: <Check className="w-3 h-3 mr-1 inline" />,
     lost: <X className="w-3 h-3 mr-1 inline" />,
+    void: <AlertCircle className="w-3 h-3 mr-1 inline" />,
   };
 
   const rowColors = {
     pending: "",
     won: "bg-emerald-500/5",
     lost: "bg-red-500/5",
+    void: "bg-amber-500/5",
   };
 
   const formattedDate = new Date(bet.kickoffTime).toLocaleString([], {
@@ -277,7 +281,13 @@ function BetRow({ bet, currency }: { bet: Bet; currency: string }) {
             className={`px-2 py-1 text-xs font-semibold rounded-full border inline-flex items-center ${statusColors[bet.status]}`}
           >
             {statusIcons[bet.status]}
-            {bet.status === "pending" ? "Pendiente" : bet.status === "won" ? "Ganada" : "Perdida"}
+            {bet.status === "pending"
+              ? "Pendiente"
+              : bet.status === "won"
+                ? "Ganada"
+                : bet.status === "lost"
+                  ? "Perdida"
+                  : "Anulada"}
           </span>
         </td>
         <td className="px-4 py-3 text-right font-bold">
@@ -365,9 +375,10 @@ function BetCard({ bet, currency }: { bet: Bet; currency: string }) {
     pending: { label: "Pendiente", classes: "bg-secondary text-muted-foreground border-border", icon: <Clock className="w-3 h-3 inline mr-1" /> },
     won:     { label: "Ganada",    classes: "bg-emerald-500/20 text-emerald-500 border-emerald-500/30", icon: <Check className="w-3 h-3 inline mr-1" /> },
     lost:    { label: "Perdida",   classes: "bg-red-500/20 text-red-500 border-red-500/30", icon: <X className="w-3 h-3 inline mr-1" /> },
+    void:    { label: "Anulada",   classes: "bg-amber-500/20 text-amber-500 border-amber-500/30", icon: <AlertCircle className="w-3 h-3 inline mr-1" /> },
   };
 
-  const rowBg = { pending: "", won: "bg-emerald-500/5", lost: "bg-red-500/5" };
+  const rowBg = { pending: "", won: "bg-emerald-500/5", lost: "bg-red-500/5", void: "bg-amber-500/5" };
 
   const formattedDate = new Date(bet.kickoffTime).toLocaleString([], {
     month: "short",
