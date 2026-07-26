@@ -13,7 +13,7 @@ import {
 import { Redirect } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { Shield, Users, Loader2, RefreshCw, CheckCircle2, XCircle, AlertTriangle, HelpCircle } from "lucide-react";
+import { Shield, Users, Loader2, RefreshCw, CheckCircle2, XCircle, AlertTriangle, HelpCircle, Cpu } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
 export default function Admin() {
@@ -105,6 +105,42 @@ function ResultVerificationPanel() {
   );
 }
 
+function AnalysisEnginePanel() {
+  return (
+    <div className="bg-card border border-border rounded-xl overflow-hidden">
+      <div className="p-6 border-b border-border bg-secondary/20 flex items-center gap-3">
+        <div className="p-2 bg-primary/10 rounded-md">
+          <Cpu className="w-5 h-5 text-primary" />
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold">Motor de Análisis</h2>
+          <p className="text-sm text-muted-foreground">IA y fuente de datos de cuotas configuradas en el servidor.</p>
+        </div>
+      </div>
+      <div className="p-6 space-y-3">
+        {[
+          { label: "Motor IA", desc: "Modelo de lenguaje para análisis y predicciones", value: "Groq · Llama 3.3 70B" },
+          { label: "Fuente de cuotas", desc: "Cuotas en tiempo real de bookmakers europeos", value: "The Odds API" },
+          { label: "Datos de partidos", desc: "Fixtures, marcadores en vivo y estadísticas", value: "API-Football" },
+        ].map(({ label, desc, value }, i, arr) => (
+          <div key={label} className={`flex items-center justify-between py-3 ${i < arr.length - 1 ? "border-b border-border" : ""}`}>
+            <div>
+              <p className="text-sm font-medium">{label}</p>
+              <p className="text-xs text-muted-foreground">{desc}</p>
+            </div>
+            <span className="px-3 py-1 bg-primary/10 text-primary text-xs font-semibold rounded-full border border-primary/20">
+              {value}
+            </span>
+          </div>
+        ))}
+        <p className="text-xs text-muted-foreground pt-2">
+          Los análisis se cachean 24 h para optimizar el uso de tokens. Un mismo partido no se analiza dos veces en el mismo día.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function AdminPanel() {
   const { data: users, isLoading } = useListUsers({ query: { queryKey: getListUsersQueryKey() } });
 
@@ -126,6 +162,7 @@ function AdminPanel() {
 
       <FreemiumSettingsPanel />
       <ResultVerificationPanel />
+      <AnalysisEnginePanel />
 
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         {isLoading ? (

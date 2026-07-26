@@ -7,7 +7,7 @@ import {
 import { useUser } from "@clerk/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { User, ShieldCheck, Loader2, Cpu, DollarSign, Check, Crown, TrendingDown } from "lucide-react";
+import { User, ShieldCheck, Loader2, DollarSign, Check, Crown, TrendingDown } from "lucide-react";
 import { SUPPORTED_CURRENCIES } from "@/lib/currency";
 
 export default function Configuracion() {
@@ -25,51 +25,6 @@ export default function Configuracion() {
       </header>
 
       <div className="grid grid-cols-1 gap-8">
-
-        {/* AI Engine Info */}
-        <section className="bg-card border border-border rounded-xl overflow-hidden">
-          <div className="p-6 border-b border-border bg-secondary/20 flex items-center gap-3">
-            <div className="p-2 bg-primary/10 rounded-md">
-              <Cpu className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold">Motor de Análisis</h2>
-              <p className="text-sm text-muted-foreground">IA y fuente de datos de cuotas configuradas en el servidor.</p>
-            </div>
-          </div>
-          <div className="p-6 space-y-3">
-            <div className="flex items-center justify-between py-3 border-b border-border">
-              <div>
-                <p className="text-sm font-medium">Motor IA</p>
-                <p className="text-xs text-muted-foreground">Modelo de lenguaje para análisis y predicciones</p>
-              </div>
-              <span className="px-3 py-1 bg-primary/10 text-primary text-xs font-semibold rounded-full border border-primary/20">
-                Groq · Llama 3.3 70B
-              </span>
-            </div>
-            <div className="flex items-center justify-between py-3 border-b border-border">
-              <div>
-                <p className="text-sm font-medium">Fuente de cuotas</p>
-                <p className="text-xs text-muted-foreground">Cuotas en tiempo real de bookmakers europeos</p>
-              </div>
-              <span className="px-3 py-1 bg-primary/10 text-primary text-xs font-semibold rounded-full border border-primary/20">
-                The Odds API
-              </span>
-            </div>
-            <div className="flex items-center justify-between py-3">
-              <div>
-                <p className="text-sm font-medium">Datos de partidos</p>
-                <p className="text-xs text-muted-foreground">Fixtures, marcadores en vivo y estadísticas</p>
-              </div>
-              <span className="px-3 py-1 bg-primary/10 text-primary text-xs font-semibold rounded-full border border-primary/20">
-                API-Football
-              </span>
-            </div>
-            <p className="text-xs text-muted-foreground pt-2">
-              Los análisis se cachean durante 24 h para optimizar el uso de tokens. Un mismo partido no se analiza dos veces en el mismo día.
-            </p>
-          </div>
-        </section>
 
         {/* Subscription Status + Pricing */}
         <section className="bg-card border border-border rounded-xl overflow-hidden">
