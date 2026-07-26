@@ -152,6 +152,25 @@ paths:
         "401":
           description: Unauthorized
 
+  /config/gemini-models:
+    get:
+      operationId: getGeminiModels
+      tags: [config]
+      summary: List available Gemini models for the user's API key
+      responses:
+        "200":
+          description: Available models
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeminiModelsResponse"
+        "400":
+          description: No Gemini key configured
+        "401":
+          description: Unauthorized
+        "502":
+          description: Gemini API error
+
   /config/gemini-key:
     get:
       operationId: getGeminiKeyStatus
@@ -457,6 +476,29 @@ components:
           type: boolean
         subscriptionExpiresAt:
           type: ["string", "null"]
+
+    GeminiModel:
+      type: object
+      required:
+        - id
+        - displayName
+      properties:
+        id:
+          type: string
+        displayName:
+          type: string
+        description:
+          type: ["string", "null"]
+
+    GeminiModelsResponse:
+      type: object
+      required:
+        - models
+      properties:
+        models:
+          type: array
+          items:
+            $ref: "#/components/schemas/GeminiModel"
 
     GeminiKeyStatus:
       type: object

@@ -10,43 +10,20 @@ import {
   useGetGeminiModel,
   getGetGeminiModelQueryKey,
   useSaveGeminiModel,
+  useGetGeminiModels,
+  getGetGeminiModelsQueryKey,
 } from "@workspace/api-client-react";
 import { useUser } from "@clerk/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Key, User, ShieldCheck, Check, Loader2, Trash2, Cpu } from "lucide-react";
 
-const GEMINI_MODELS = [
-  {
-    id: "gemini-2.0-flash",
-    label: "Gemini 2.0 Flash",
-    description: "Rápido y eficiente. Recomendado para uso diario.",
-    badge: "Recomendado",
-  },
-  {
-    id: "gemini-2.5-flash",
-    label: "Gemini 2.5 Flash",
-    description: "Mayor capacidad de razonamiento con buena velocidad.",
-    badge: "Nuevo",
-  },
-  {
-    id: "gemini-2.5-pro",
-    label: "Gemini 2.5 Pro",
-    description: "Máxima inteligencia para análisis complejos. Más lento.",
-    badge: "Pro",
-  },
-  {
-    id: "gemini-1.5-pro-001",
-    label: "Gemini 1.5 Pro",
-    description: "Modelo Pro de generación anterior. Alta calidad.",
-    badge: null,
-  },
-  {
-    id: "gemini-1.5-flash-001",
-    label: "Gemini 1.5 Flash",
-    description: "Flash de generación anterior. Muy económico.",
-    badge: null,
-  },
+const FALLBACK_MODELS = [
+  { id: "gemini-2.0-flash",     displayName: "Gemini 2.0 Flash",     description: "Rápido y eficiente. Recomendado para uso diario." },
+  { id: "gemini-2.5-flash",     displayName: "Gemini 2.5 Flash",     description: "Mayor capacidad de razonamiento con buena velocidad." },
+  { id: "gemini-2.5-pro",       displayName: "Gemini 2.5 Pro",       description: "Máxima inteligencia para análisis complejos. Más lento." },
+  { id: "gemini-1.5-pro-001",   displayName: "Gemini 1.5 Pro",       description: "Modelo Pro de generación anterior. Alta calidad." },
+  { id: "gemini-1.5-flash-001", displayName: "Gemini 1.5 Flash",     description: "Flash de generación anterior. Muy económico." },
 ];
 
 export default function Configuracion() {
@@ -57,6 +34,13 @@ export default function Configuracion() {
   const { data: me } = useGetMe({ query: { queryKey: getGetMeQueryKey() } });
   const { data: keyStatus } = useGetGeminiKeyStatus({ query: { queryKey: getGetGeminiKeyStatusQueryKey() } });
   const { data: modelConfig } = useGetGeminiModel({ query: { queryKey: getGetGeminiModelQueryKey() } });
+  const { data: modelsData } = useGetGeminiModels({
+    query: {
+      queryKey: getGetGeminiModelsQueryKey(),
+      enabled: !!keyStatus?.hasKey,
+      retry: false,
+    },
+  });
 
   return (
     <div className="space-y-8 max-w-4xl mx-auto animate-in fade-in duration-500">
@@ -79,7 +63,7 @@ export default function Configuracion() {
             </div>
           </div>
           <div className="p-6">
-            <GeminiKeyForm hasKey={keyStatus?.hasKey} />
+            <GeminiKeyForm hasKey={keyStatus?.hasKey} queryClient={queryClient} />
           </div>
         </section>
 
@@ -95,7 +79,13 @@ export default function Configuracion() {
             </div>
           </div>
           <div className="p-6">
-            <GeminiModelSelector currentModel={modelConfig?.model} queryClient={queryClient} toast={toast} />
+            <GeminiModelSelector
+              currentModel={modelConfig?.model}
+              availableModels={modelsData?.models}
+              hasKey={keyStatus?.hasKey}
+              queryClient={queryClient}
+              toast={toast}
+            />
           </div>
         </section>
 
@@ -158,8 +148,18 @@ export default function Configuracion() {
   );
 }
 
-function GeminiModelSelector({ currentModel, queryClient, toast }: {
+type ModelItem = { id: string; displayName: string; description: string | null };
+
+function GeminiModelSelector({
+  currentModel,
+  availableModels,
+  hasKey,
+  queryClient,
+  toast,
+}: {
   currentModel?: string;
+  availableModels?: ModelItem[];
+  hasKey?: boolean;
   queryClient: ReturnType<typeof import("@tanstack/react-query").useQueryClient>;
   toast: ReturnType<typeof useToast>["toast"];
 }) {
@@ -169,6 +169,11 @@ function GeminiModelSelector({ currentModel, queryClient, toast }: {
   useEffect(() => {
     if (currentModel) setSelected(currentModel);
   }, [currentModel]);
+
+  // Use live models if available, fall back to hardcoded list
+  const models: ModelItem[] = availableModels && availableModels.length > 0
+    ? availableModels
+    : FALLBACK_MODELS;
 
   const handleSave = () => {
     saveModel.mutate({ data: { model: selected } }, {
@@ -182,8 +187,14 @@ function GeminiModelSelector({ currentModel, queryClient, toast }: {
 
   return (
     <div className="space-y-4">
+      {!hasKey && (
+        <p className="text-sm text-muted-foreground bg-secondary/50 border border-border rounded-md px-4 py-3">
+          Guarda una API Key de Gemini para ver los modelos disponibles con tu cuenta.
+        </p>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {GEMINI_MODELS.map(m => (
+        {models.map(m => (
           <button
             key={m.id}
             onClick={() => setSelected(m.id)}
@@ -195,18 +206,13 @@ function GeminiModelSelector({ currentModel, queryClient, toast }: {
           >
             <div className="flex items-center justify-between mb-1">
               <span className={`text-sm font-semibold ${selected === m.id ? "text-primary" : "text-foreground"}`}>
-                {m.label}
+                {m.displayName}
               </span>
-              <div className="flex items-center gap-2">
-                {m.badge && (
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/20 text-primary border border-primary/30">
-                    {m.badge}
-                  </span>
-                )}
-                {selected === m.id && <Check className="w-4 h-4 text-primary shrink-0" />}
-              </div>
+              {selected === m.id && <Check className="w-4 h-4 text-primary shrink-0" />}
             </div>
-            <p className="text-xs text-muted-foreground">{m.description}</p>
+            {m.description && (
+              <p className="text-xs text-muted-foreground line-clamp-2">{m.description}</p>
+            )}
           </button>
         ))}
       </div>
@@ -223,10 +229,15 @@ function GeminiModelSelector({ currentModel, queryClient, toast }: {
   );
 }
 
-function GeminiKeyForm({ hasKey }: { hasKey?: boolean }) {
+function GeminiKeyForm({
+  hasKey,
+  queryClient,
+}: {
+  hasKey?: boolean;
+  queryClient: ReturnType<typeof import("@tanstack/react-query").useQueryClient>;
+}) {
   const [apiKey, setApiKey] = useState("");
   const { toast } = useToast();
-  const queryClient = useQueryClient();
   const saveKey = useSaveGeminiKey();
   const deleteKey = useDeleteGeminiKey();
 
@@ -236,9 +247,11 @@ function GeminiKeyForm({ hasKey }: { hasKey?: boolean }) {
 
     saveKey.mutate({ data: { apiKey } }, {
       onSuccess: () => {
-        toast({ title: "API Key guardada", description: "El motor de análisis está listo." });
+        toast({ title: "API Key guardada", description: "Consultando modelos disponibles…" });
         setApiKey("");
+        // Refresh both key status and the models list
         queryClient.invalidateQueries({ queryKey: getGetGeminiKeyStatusQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetGeminiModelsQueryKey() });
       },
       onError: () => toast({ title: "Error", description: "No se pudo guardar la clave.", variant: "destructive" })
     });
@@ -249,6 +262,7 @@ function GeminiKeyForm({ hasKey }: { hasKey?: boolean }) {
       onSuccess: () => {
         toast({ title: "API Key eliminada" });
         queryClient.invalidateQueries({ queryKey: getGetGeminiKeyStatusQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetGeminiModelsQueryKey() });
       }
     });
   };
@@ -300,7 +314,6 @@ function ProfileForm({ email, currentName }: { email?: string, currentName?: str
   const queryClient = useQueryClient();
   const updateMe = useUpdateMe();
 
-  // Guard initial value sync
   const initRef = useRef(false);
   useEffect(() => {
     if (currentName && !initRef.current) {

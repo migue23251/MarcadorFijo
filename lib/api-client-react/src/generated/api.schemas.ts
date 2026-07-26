@@ -39,6 +39,17 @@ export interface SubscriptionUpdate {
   subscriptionExpiresAt?: string | null;
 }
 
+export interface GeminiModel {
+  id: string;
+  displayName: string;
+  /** @nullable */
+  description?: string | null;
+}
+
+export interface GeminiModelsResponse {
+  models: GeminiModel[];
+}
+
 export interface GeminiKeyStatus {
   hasKey: boolean;
 }

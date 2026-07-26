@@ -29,6 +29,7 @@ import type {
   GeminiKeyStatus,
   GeminiModelConfig,
   GeminiModelInput,
+  GeminiModelsResponse,
   GetCachedAnalysisParams,
   HealthStatus,
   LeagueMatches,
@@ -589,6 +590,83 @@ export const useSaveGeminiModel = <TError = ErrorType<void>,
       > => {
       return useMutation(getSaveGeminiModelMutationOptions(options));
     }
+
+export const getGetGeminiModelsUrl = () => {
+
+
+
+
+  return `/api/config/gemini-models`
+}
+
+/**
+ * @summary List available Gemini models for the user's API key
+ */
+export const getGeminiModels = async ( options?: RequestInit): Promise<GeminiModelsResponse> => {
+
+  return customFetch<GeminiModelsResponse>(getGetGeminiModelsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetGeminiModelsQueryKey = () => {
+    return [
+    `/api/config/gemini-models`
+    ] as const;
+    }
+
+
+export const getGetGeminiModelsQueryOptions = <TData = Awaited<ReturnType<typeof getGeminiModels>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGeminiModels>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGeminiModelsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGeminiModels>>> = ({ signal }) => getGeminiModels({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGeminiModels>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetGeminiModelsQueryResult = NonNullable<Awaited<ReturnType<typeof getGeminiModels>>>
+export type GetGeminiModelsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List available Gemini models for the user's API key
+ */
+
+export function useGetGeminiModels<TData = Awaited<ReturnType<typeof getGeminiModels>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGeminiModels>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetGeminiModelsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetGeminiKeyStatusUrl = () => {
 

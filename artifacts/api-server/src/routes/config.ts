@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, userConfigsTable } from "@workspace/db";
 import {
   GetGeminiKeyStatusResponse,
+  GetGeminiModelsResponse,
   SaveGeminiKeyBody,
   SaveGeminiKeyResponse,
   GetGeminiModelResponse,
@@ -12,10 +13,37 @@ import {
 import { requireAuth, type AuthenticatedRequest } from "../lib/auth";
 import { encrypt, decrypt } from "../lib/crypto";
 import { logger } from "../lib/logger";
+import { listAvailableModels, GeminiApiError } from "../lib/gemini";
 
 export const DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
 
 const router: IRouter = Router();
+
+// GET /config/gemini-models
+router.get(
+  "/config/gemini-models",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const user = (req as AuthenticatedRequest).dbUser;
+    const apiKey = await getUserGeminiKey(user.clerkId);
+
+    if (!apiKey) {
+      res.status(400).json({ error: "No Gemini API key configured." });
+      return;
+    }
+
+    try {
+      const models = await listAvailableModels(apiKey);
+      res.json(GetGeminiModelsResponse.parse({ models }));
+    } catch (err) {
+      if (err instanceof GeminiApiError) {
+        res.status(502).json({ error: err.message });
+      } else {
+        res.status(502).json({ error: "Error al consultar los modelos de Gemini." });
+      }
+    }
+  },
+);
 
 // GET /config/gemini-model
 router.get(

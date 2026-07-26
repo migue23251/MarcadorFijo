@@ -108,6 +108,18 @@ export const SaveGeminiModelResponse = zod.object({
 
 
 /**
+ * @summary List available Gemini models for the user's API key
+ */
+export const GetGeminiModelsResponse = zod.object({
+  "models": zod.array(zod.object({
+  "id": zod.string(),
+  "displayName": zod.string(),
+  "description": zod.string().nullish()
+}))
+})
+
+
+/**
  * @summary Check if user has a Gemini API key configured
  */
 export const GetGeminiKeyStatusResponse = zod.object({

@@ -87,6 +87,48 @@ async function callGemini(
 }
 
 // ---------------------------------------------------------------------------
+// Model listing
+// ---------------------------------------------------------------------------
+
+export interface GeminiModelInfo {
+  id: string;
+  displayName: string;
+  description: string | null;
+}
+
+export async function listAvailableModels(apiKey: string): Promise<GeminiModelInfo[]> {
+  const ai = makeClient(apiKey);
+
+  try {
+    const models: GeminiModelInfo[] = [];
+    const pager = await ai.models.list();
+    for await (const model of pager) {
+      // Only keep models that support generateContent
+      const actions: string[] = (model as any).supportedActions ?? [];
+      if (!actions.includes("generateContent")) continue;
+
+      const name: string = model.name ?? "";
+      // Strip the "models/" prefix to get a clean id like "gemini-2.0-flash"
+      const id = name.startsWith("models/") ? name.slice("models/".length) : name;
+      if (!id) continue;
+
+      models.push({
+        id,
+        displayName: model.displayName ?? id,
+        description: model.description ?? null,
+      });
+    }
+
+    // Sort: newer/more capable models first
+    return models.sort((a, b) => a.displayName.localeCompare(b.displayName));
+  } catch (err: any) {
+    const message: string = err?.message ?? String(err);
+    logger.error({ message }, "Failed to list Gemini models");
+    throw new GeminiApiError(502, `No se pudieron obtener los modelos: ${message.slice(0, 200)}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
