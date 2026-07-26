@@ -228,7 +228,7 @@ export default function Dashboard() {
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Centro de Operaciones</h1>
-          <p className="text-muted-foreground">Partidos reales · Predicciones con Gemini AI.</p>
+          <p className="text-muted-foreground">Partidos reales · Predicciones con AI.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-3 bg-card px-4 py-2 rounded-md border border-border">
