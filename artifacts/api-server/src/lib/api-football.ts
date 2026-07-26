@@ -129,18 +129,18 @@ function parseFixture(
 }
 
 /**
- * Fetch one page of fixtures from API-Football for a given date.
- * Uses the correct v3.football.api-sports.io host (supports RapidAPI key headers).
- * Passes timezone=UTC to ensure `date` filtering is unambiguous.
+ * Fetch ALL fixtures for a given date in a single API call.
+ * The /fixtures?date= endpoint returns the full day's results without pagination
+ * (unlike /players or /odds which paginate). Do NOT send a `page` param here.
+ * Passes timezone=UTC so date filtering is unambiguous.
  */
-async function fetchFixturesPage(date: string, page: number): Promise<{ fixtures: any[]; totalPages: number }> {
+async function fetchAllFixturesForDate(date: string): Promise<any[]> {
   const apiKey = process.env["RAPIDAPI_KEY"];
   if (!apiKey) throw new Error("RAPIDAPI_KEY is not configured");
 
   const url = new URL(`${API_FOOTBALL_BASE}/fixtures`);
   url.searchParams.set("date", date);
   url.searchParams.set("timezone", "UTC");
-  url.searchParams.set("page", String(page));
 
   const response = await fetch(url.toString(), {
     headers: {
@@ -165,27 +165,7 @@ async function fetchFixturesPage(date: string, page: number): Promise<{ fixtures
     throw new Error(`API-Football error: ${msg}`);
   }
 
-  const totalPages: number = data?.paging?.total ?? 1;
-  return { fixtures: (data?.response as any[]) ?? [], totalPages };
-}
-
-/**
- * Fetch ALL fixtures for a given date, handling pagination automatically.
- * Free tier: 100 req/day — one call per page (almost always 1 page for a single date).
- */
-async function fetchAllFixturesForDate(date: string): Promise<any[]> {
-  const { fixtures: firstPage, totalPages } = await fetchFixturesPage(date, 1);
-
-  if (totalPages <= 1) return firstPage;
-
-  // Fetch remaining pages sequentially to be safe on rate limits
-  logger.info({ date, totalPages }, "API-Football fixtures: multiple pages detected");
-  const allFixtures = [...firstPage];
-  for (let page = 2; page <= totalPages; page++) {
-    const { fixtures } = await fetchFixturesPage(date, page);
-    allFixtures.push(...fixtures);
-  }
-  return allFixtures;
+  return (data?.response as any[]) ?? [];
 }
 
 // ---------------------------------------------------------------------------
