@@ -154,8 +154,8 @@ function parseFixture(
  * Passes timezone=UTC so date filtering is unambiguous.
  */
 async function fetchAllFixturesForDate(date: string): Promise<any[]> {
-  const apiKey = process.env["RAPIDAPI_KEY"];
-  if (!apiKey) throw new Error("RAPIDAPI_KEY is not configured");
+  const apiKey = process.env["FOOTBALL_API_KEY"];
+  if (!apiKey) throw new Error("FOOTBALL_API_KEY is not configured");
 
   const url = new URL(`${API_FOOTBALL_BASE}/fixtures`);
   url.searchParams.set("date", date);

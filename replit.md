@@ -13,7 +13,7 @@ A full-stack football betting management and prediction app powered by Gemini AI
 - `pnpm --filter @workspace/db run seed` — insert seed data (admin user)
 - Required env: `DATABASE_URL` — Postgres connection string
 - Required env: `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`, `VITE_CLERK_PUBLISHABLE_KEY` — auto-provisioned via Clerk
-- Required env: `RAPIDAPI_KEY` — API-Football key from RapidAPI (100 req/day free tier)
+- Required env: `FOOTBALL_API_KEY` — API-Football key from RapidAPI (100 req/day free tier)
 - Optional env: `ENCRYPTION_KEY` — AES-256-GCM key for Gemini API key encryption (falls back to SESSION_SECRET)
 
 ## Stack
@@ -61,7 +61,7 @@ Project is fully set up to run on Replit:
 - DB schema pushed via `pnpm --filter @workspace/db run push` (also runs automatically on `scripts/post-merge.sh`)
 - Clerk authentication provisioned via Replit-managed Clerk; `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`, and `VITE_CLERK_PUBLISHABLE_KEY` are set as secrets
 - `SESSION_SECRET` is available in the environment (used as fallback `ENCRYPTION_KEY` for Gemini API key encryption)
-- **Still needed:** `RAPIDAPI_KEY` — add as a Replit Secret to enable live football fixture fetching (sign up at https://rapidapi.com/api-sports/api/api-football, 100 req/day free tier)
+- `FOOTBALL_API_KEY` is set as a Replit Secret for live football fixture fetching via API-Football (RapidAPI)
 
 ## User preferences
 
