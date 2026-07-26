@@ -7,6 +7,9 @@ import {
   ChevronDown,
   Check,
   Zap,
+  TrendingUp,
+  Flag,
+  SquareX,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 
@@ -20,7 +23,7 @@ const MOCK_MATCH = {
 
 const MOCK_ANALYSIS = {
   summary:
-    "El Madrid presenta superioridad en presión alta y conversión de xG (+0.38). El Barça llega con Pedri tocado y baja en su pressing medio. Valor detectado en mercado de córners y hándicap asiático.",
+    "El Madrid presenta superioridad en presión alta y conversión de xG (+0.38). El Barça llega con Pedri tocado y baja en su pressing medio. Valor detectado en córners, hándicap asiático y ambos marcan.",
   recommendation: "Real Madrid Hándicap –0.5",
   confidence: 78,
   odds: "1.87",
@@ -35,6 +38,32 @@ const MOCK_ANALYSIS = {
     { label: "xG Visitante (media 5J)", value: "1.93" },
     { label: "H2H (últimos 5)", value: "3-1-1" },
     { label: "Cuota Fair Value", value: "1.69" },
+  ],
+  markets: [
+    {
+      category: "Goles",
+      items: [
+        { label: "Más de 2.5 goles", prob: 71, verdict: "valor", odds: "1.62", ev: "+8.2%" },
+        { label: "Ambos marcan (BTTS)", prob: 63, verdict: "valor", odds: "1.74", ev: "+9.6%" },
+        { label: "Más de 3.5 goles", prob: 38, verdict: "neutro", odds: "2.40", ev: "+1.1%" },
+      ],
+    },
+    {
+      category: "Córners",
+      items: [
+        { label: "Más de 9.5 córners", prob: 68, verdict: "valor", odds: "1.80", ev: "+11.4%" },
+        { label: "Local +5.5 córners", prob: 61, verdict: "valor", odds: "1.90", ev: "+7.3%" },
+        { label: "Visitante +4.5 córners", prob: 44, verdict: "neutro", odds: "2.10", ev: "-1.2%" },
+      ],
+    },
+    {
+      category: "Tarjetas",
+      items: [
+        { label: "Más de 3.5 tarjetas", prob: 57, verdict: "valor", odds: "1.95", ev: "+6.8%" },
+        { label: "Tarjeta roja (sí)", prob: 18, verdict: "evitar", odds: "4.50", ev: "-3.5%" },
+        { label: "Más de 1.5 tarjetas amarillas Local", prob: 52, verdict: "neutro", odds: "2.05", ev: "+2.1%" },
+      ],
+    },
   ],
 };
 
@@ -155,8 +184,21 @@ function ProbBar({ label, value }: { label: string; value: number }) {
 }
 
 /* ─── Page ──────────────────────────────────────────────────────────────── */
+const VERDICT_STYLES: Record<string, string> = {
+  valor: "bg-primary/15 text-primary border border-primary/30",
+  neutro: "bg-muted text-muted-foreground border border-border",
+  evitar: "bg-destructive/10 text-destructive border border-destructive/20",
+};
+const VERDICT_LABELS: Record<string, string> = {
+  valor: "Valor",
+  neutro: "Neutro",
+  evitar: "Evitar",
+};
+const CATEGORY_ICONS = [TrendingUp, Flag, SquareX];
+
 export default function Home() {
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const [activeMarket, setActiveMarket] = useState(0);
 
   return (
     <div className="min-h-[100dvh] bg-background text-foreground flex flex-col selection:bg-primary/30">
@@ -315,6 +357,59 @@ export default function Home() {
                         {MOCK_ANALYSIS.confidence}% confianza
                       </span>
                     </div>
+                  </div>
+                </div>
+
+                {/* Markets tabs */}
+                <div className="space-y-3">
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Mercados Analizados</p>
+                  {/* Tab bar */}
+                  <div className="flex gap-2 flex-wrap">
+                    {MOCK_ANALYSIS.markets.map(({ category }, i) => {
+                      const Icon = CATEGORY_ICONS[i];
+                      return (
+                        <button
+                          key={category}
+                          type="button"
+                          onClick={() => setActiveMarket(i)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                            activeMarket === i
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted text-muted-foreground hover:text-foreground border border-border"
+                          }`}
+                        >
+                          <Icon className="w-3.5 h-3.5" />
+                          {category}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {/* Market rows */}
+                  <div className="rounded-lg border border-border bg-muted/30 overflow-hidden divide-y divide-border">
+                    {MOCK_ANALYSIS.markets[activeMarket].items.map(({ label, prob, verdict, odds, ev }) => (
+                      <div key={label} className="flex items-center gap-3 px-4 py-2.5">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-foreground truncate">{label}</p>
+                        </div>
+                        {/* Prob mini-bar */}
+                        <div className="hidden sm:flex items-center gap-2 w-28">
+                          <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-primary to-emerald-400"
+                              style={{ width: `${prob}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] font-bold text-muted-foreground w-8 text-right">{prob}%</span>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-xs text-muted-foreground">@{odds}</span>
+                          <span className="text-[10px] font-bold text-primary">{ev}</span>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${VERDICT_STYLES[verdict]}`}>
+                            {VERDICT_LABELS[verdict]}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
