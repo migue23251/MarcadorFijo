@@ -47,40 +47,57 @@ export async function requireAuth(
     .where(eq(usersTable.clerkId, clerkId))
     .limit(1);
 
-  if (!user) {
-    // JIT provision — look up email from Clerk
-    let email = "";
+  if (!user || !user.name?.trim()) {
+    // JIT provision/profile sync — keep the local profile aligned with Clerk
+    let email = user?.email ?? "";
+    let name: string | null = user?.name ?? null;
     try {
       const client = getClerkClient();
       const clerkUser = await client.users.getUser(clerkId);
       email = clerkUser.emailAddresses[0]?.emailAddress ?? "";
+      const clerkName = [clerkUser.firstName, clerkUser.lastName]
+        .filter((part): part is string => Boolean(part?.trim()))
+        .join(" ")
+        .trim();
+      name = clerkName || clerkUser.username?.trim() || null;
     } catch (err) {
       logger.warn({ err, clerkId }, "Could not fetch Clerk user for JIT provisioning");
     }
 
-    // First user becomes admin and gets an active subscription
-    const [{ count }] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(usersTable);
+    if (!user) {
+      // First user becomes admin and gets an active subscription
+      const [{ count }] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(usersTable);
 
-    const isFirstUser = Number(count) === 0;
+      const isFirstUser = Number(count) === 0;
 
-    [user] = await db
-      .insert(usersTable)
-      .values({
-        clerkId,
-        email,
-        role: isFirstUser ? "admin" : "user",
-        activeSubscription: isFirstUser,
-        subscriptionPlan: isFirstUser ? "anual" : "free",
-        subscriptionExpiresAt: isFirstUser
-          ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
-          : null,
-        isSubscriptionActive: isFirstUser,
-      })
-      .returning();
+      [user] = await db
+        .insert(usersTable)
+        .values({
+          clerkId,
+          email,
+          name,
+          role: isFirstUser ? "admin" : "user",
+          activeSubscription: isFirstUser,
+          subscriptionPlan: isFirstUser ? "anual" : "free",
+          subscriptionExpiresAt: isFirstUser
+            ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
+            : null,
+          isSubscriptionActive: isFirstUser,
+        })
+        .returning();
 
-    logger.info({ clerkId, role: user.role }, "JIT provisioned new user");
+      logger.info({ clerkId, role: user.role, hasName: Boolean(name) }, "JIT provisioned new user");
+    } else if (name) {
+      [user] = await db
+        .update(usersTable)
+        .set({ name })
+        .where(eq(usersTable.clerkId, clerkId))
+        .returning();
+
+      logger.info({ clerkId, hasName: true }, "Synchronized user name from Clerk");
+    }
   }
 
   (req as AuthenticatedRequest).dbUser = user;
