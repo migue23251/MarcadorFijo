@@ -346,7 +346,7 @@ export default function Dashboard() {
 }
 
 function MatchCard({ match, leagueName }: { match: Match, leagueName: string }) {
-  const [expanded, setExpanded] = useState(false);
+  const [analysisModalOpen, setAnalysisModalOpen] = useState(false);
   const [loadCached, setLoadCached] = useState(false);
   const [retryCountdown, setRetryCountdown] = useState<number | null>(null);
 
@@ -369,16 +369,13 @@ function MatchCard({ match, leagueName }: { match: Match, leagueName: string }) 
   const analysis = match.hasAnalysis ? cachedAnalysisQuery.data : analyzeMutation.data;
   const isAnalyzing = match.hasAnalysis ? cachedAnalysisQuery.isFetching : analyzeMutation.isPending;
 
-  // Disable analysis for matches that have started or finished
   const isFinished = match.status === "finished" || match.status === "postponed" || match.status === "cancelled";
   const isStarted = match.status === "live" || match.status === "halftime";
-  // Can't run a new analysis once the match is underway or over; cached result still viewable
   const cannotAnalyzeNew = isFinished || isStarted;
 
   const doAnalyze = useCallback(() => {
     if (analyzeMutation.isPending || analyzeRequestLockedRef.current) return;
     analyzeRequestLockedRef.current = true;
-    setExpanded(true);
     analyzeMutation.mutate(
       { data: { homeTeam: match.homeTeam, awayTeam: match.awayTeam, league: leagueName, kickoffTime: match.kickoffTime } },
       { onSettled: () => { analyzeRequestLockedRef.current = false; } },
@@ -386,13 +383,14 @@ function MatchCard({ match, leagueName }: { match: Match, leagueName: string }) 
   }, [analyzeMutation, match.homeTeam, match.awayTeam, match.kickoffTime, leagueName]);
 
   const handleAnalyze = () => {
-    if (analysis) { setExpanded((curr) => !curr); return; }
-    if (match.hasAnalysis) { setLoadCached(true); setExpanded(true); return; }
+    setAnalysisModalOpen(true);
+    if (analysis) return;
+    if (match.hasAnalysis) { setLoadCached(true); return; }
     if (cannotAnalyzeNew) return;
     doAnalyze();
   };
 
-  // Start countdown when Gemini returns a 429 with retryAfter
+  // Start countdown when API returns a 429 with retryAfter
   useEffect(() => {
     if (!analyzeMutation.isError) { setRetryCountdown(null); return; }
     const errData = (analyzeMutation.error as any)?.data as { retryAfter?: number } | undefined;
@@ -424,129 +422,156 @@ function MatchCard({ match, leagueName }: { match: Match, leagueName: string }) 
   const showScore = match.score && (match.status === "live" || match.status === "halftime" || match.status === "finished");
 
   return (
-    <div className="bg-card border border-border rounded-lg overflow-hidden flex flex-col transition-all duration-300 hover:border-primary/50">
-      <div className="p-4 flex items-center justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          {/* Status + time row */}
-          <div className="flex items-center gap-2 mb-2 flex-wrap">
-            {match.status === "scheduled" && (
-              <span className="text-xs font-medium text-primary px-2 py-0.5 bg-primary/10 rounded-sm">
-                {match.kickoffTime
-                  ? (() => { const d = new Date(match.kickoffTime); return isNaN(d.getTime()) ? match.kickoffTime : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); })()
-                  : "—"}
-              </span>
-            )}
-            <StatusBadge status={match.status} />
-            {match.stadium && <span className="text-xs text-muted-foreground truncate hidden sm:block">{match.stadium}</span>}
-            {match.hasAnalysis && (
-              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-sm bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
-                En caché
-              </span>
+    <>
+      <div className="bg-card border border-border rounded-lg overflow-hidden flex flex-col transition-all duration-300 hover:border-primary/50">
+        <div className="p-4 flex items-center justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            {/* Status + time row */}
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              {match.status === "scheduled" && (
+                <span className="text-xs font-medium text-primary px-2 py-0.5 bg-primary/10 rounded-sm">
+                  {match.kickoffTime
+                    ? (() => { const d = new Date(match.kickoffTime); return isNaN(d.getTime()) ? match.kickoffTime : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); })()
+                    : "—"}
+                </span>
+              )}
+              <StatusBadge status={match.status} />
+              {match.stadium && <span className="text-xs text-muted-foreground truncate hidden sm:block">{match.stadium}</span>}
+              {match.hasAnalysis && (
+                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-sm bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+                  En caché
+                </span>
+              )}
+            </div>
+
+            {/* Teams + score */}
+            {showScore ? (
+              <div className="flex items-center gap-3 mt-1">
+                <div className="flex-1 min-w-0">
+                  <p className="text-base font-bold text-foreground truncate">{match.homeTeam}</p>
+                  <p className="text-base font-bold text-foreground truncate">{match.awayTeam}</p>
+                </div>
+                <div className="flex flex-col items-center shrink-0">
+                  <span className={`text-2xl font-black tabular-nums ${match.status === "live" || match.status === "halftime" ? "text-primary" : "text-foreground"}`}>
+                    {match.score!.home ?? "—"}
+                  </span>
+                  <span className={`text-2xl font-black tabular-nums ${match.status === "live" || match.status === "halftime" ? "text-primary" : "text-foreground"}`}>
+                    {match.score!.away ?? "—"}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col mt-1">
+                <span className="text-lg font-bold text-foreground truncate">{match.homeTeam}</span>
+                <span className="text-sm text-muted-foreground">vs</span>
+                <span className="text-lg font-bold text-foreground truncate">{match.awayTeam}</span>
+              </div>
             )}
           </div>
 
-          {/* Teams + score */}
-          {showScore ? (
-            <div className="flex items-center gap-3 mt-1">
-              <div className="flex-1 min-w-0">
-                <p className="text-base font-bold text-foreground truncate">{match.homeTeam}</p>
-                <p className="text-base font-bold text-foreground truncate">{match.awayTeam}</p>
-              </div>
-              <div className="flex flex-col items-center shrink-0">
-                <span className={`text-2xl font-black tabular-nums ${match.status === "live" || match.status === "halftime" ? "text-primary" : "text-foreground"}`}>
-                  {match.score!.home ?? "—"}
-                </span>
-                <span className={`text-2xl font-black tabular-nums ${match.status === "live" || match.status === "halftime" ? "text-primary" : "text-foreground"}`}>
-                  {match.score!.away ?? "—"}
-                </span>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col mt-1">
-              <span className="text-lg font-bold text-foreground truncate">{match.homeTeam}</span>
-              <span className="text-sm text-muted-foreground">vs</span>
-              <span className="text-lg font-bold text-foreground truncate">{match.awayTeam}</span>
-            </div>
-          )}
-        </div>
-
-        <div className="ml-2 flex flex-col items-end justify-center shrink-0">
-          {cannotAnalyzeNew && !match.hasAnalysis ? (
-            <span className="text-xs text-muted-foreground/50 px-3 py-2">
-              {isFinished ? "Finalizado" : "En curso"}
-            </span>
-          ) : (
-            <button
-              onClick={handleAnalyze}
-              disabled={isAnalyzing}
-              className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-md font-medium text-sm transition-colors border border-border disabled:opacity-50"
-            >
-              {isAnalyzing ? (
-                <><Loader2 className="w-4 h-4 animate-spin text-primary" /> {match.hasAnalysis ? "Cargando..." : "Analizando"}</>
-              ) : analysis ? (
-                <><ChevronDown className={`w-4 h-4 transition-transform ${expanded ? "rotate-180" : ""}`} /> {expanded ? "Ocultar" : "Ver Análisis"}</>
-              ) : match.hasAnalysis ? (
-                <><ChevronDown className="w-4 h-4 text-emerald-400" /> Ver Análisis</>
-              ) : (
-                <><Target className="w-4 h-4 text-primary" /> Analizar</>
-              )}
-            </button>
-          )}
+          <div className="ml-2 flex flex-col items-end justify-center shrink-0">
+            {cannotAnalyzeNew && !match.hasAnalysis ? (
+              <span className="text-xs text-muted-foreground/50 px-3 py-2">
+                {isFinished ? "Finalizado" : "En curso"}
+              </span>
+            ) : (
+              <button
+                onClick={handleAnalyze}
+                className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-md font-medium text-sm transition-colors border border-border"
+              >
+                {analysis || match.hasAnalysis ? (
+                  <><ChevronDown className="w-4 h-4 text-emerald-400" /> Ver Análisis</>
+                ) : (
+                  <><Target className="w-4 h-4 text-primary" /> Analizar</>
+                )}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      {analyzeMutation.isError && (() => {
-        const errData = (analyzeMutation.error as any)?.data as { error?: string; retryAfter?: number } | undefined;
-        const is429 = !!errData?.retryAfter;
-        const errorMsg = errData?.error ?? (analyzeMutation.error as Error)?.message ?? "Error al analizar. Inténtalo de nuevo.";
-        return is429 ? (
-          <div className="border-t border-border bg-amber-500/5 p-3 flex items-center gap-2 text-sm text-amber-400">
-            <Clock className="w-4 h-4 shrink-0 animate-pulse" />
-            <p>
-              {retryCountdown !== null && retryCountdown > 0
-                ? `Límite de Gemini — reintentando en ${retryCountdown}s...`
-                : "Reintentando análisis..."}
-            </p>
-          </div>
-        ) : (
-          <div className="border-t border-border bg-red-500/5 p-3 flex items-start gap-2 text-sm text-red-400">
-            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-            <p>{errorMsg}</p>
-          </div>
-        );
-      })()}
-
-      {expanded && (isAnalyzing || analysis) && (
-        <div className="border-t border-border bg-black/20 p-4 animate-in slide-in-from-top-2 duration-300">
-          {isAnalyzing && (
-            <div className="space-y-3">
-              <div className="h-4 bg-muted animate-pulse rounded w-3/4"></div>
-              <div className="h-4 bg-muted animate-pulse rounded w-1/2"></div>
-              <div className="h-4 bg-muted animate-pulse rounded w-full"></div>
-            </div>
-          )}
-
-          {analysis && !isAnalyzing && (
-            <div className="space-y-6">
-              <div className="flex items-start gap-2 text-sm text-muted-foreground italic bg-secondary/30 p-3 rounded-md border border-border/50">
-                <Info className="w-4 h-4 mt-0.5 shrink-0 text-primary" />
-                <p>{analysis.summary}</p>
+      {/* Analysis Modal */}
+      <Dialog.Root open={analysisModalOpen} onOpenChange={setAnalysisModalOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 animate-in fade-in" />
+          <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-2rem)] max-w-xl bg-card border border-border rounded-xl shadow-2xl z-50 flex flex-col max-h-[85dvh] animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal header */}
+            <div className="flex items-start justify-between gap-4 p-5 border-b border-border shrink-0">
+              <div className="min-w-0">
+                <Dialog.Title className="text-base font-bold text-foreground truncate">
+                  {match.homeTeam} <span className="text-muted-foreground font-normal">vs</span> {match.awayTeam}
+                </Dialog.Title>
+                <p className="text-xs text-muted-foreground mt-0.5">{leagueName}</p>
               </div>
-              <div className="space-y-3">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">Mercados Detectados</h4>
-                {analysis.predictions.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No se encontró valor claro en este evento.</p>
+              <Dialog.Close className="shrink-0 p-1.5 rounded-md hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </Dialog.Close>
+            </div>
+
+            {/* Modal body — scrollable */}
+            <div className="overflow-y-auto p-5 space-y-5">
+              {/* Loading */}
+              {isAnalyzing && (
+                <div className="space-y-3 py-4">
+                  <div className="flex items-center gap-2 text-sm text-primary mb-4">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Analizando partido con IA...</span>
+                  </div>
+                  <div className="h-3 bg-muted animate-pulse rounded w-full"></div>
+                  <div className="h-3 bg-muted animate-pulse rounded w-4/5"></div>
+                  <div className="h-3 bg-muted animate-pulse rounded w-3/5"></div>
+                  <div className="h-3 bg-muted animate-pulse rounded w-full mt-4"></div>
+                  <div className="h-16 bg-muted animate-pulse rounded w-full mt-2"></div>
+                  <div className="h-16 bg-muted animate-pulse rounded w-full mt-2"></div>
+                </div>
+              )}
+
+              {/* Error */}
+              {analyzeMutation.isError && !isAnalyzing && (() => {
+                const errData = (analyzeMutation.error as any)?.data as { error?: string; retryAfter?: number } | undefined;
+                const is429 = !!errData?.retryAfter;
+                const errorMsg = errData?.error ?? (analyzeMutation.error as Error)?.message ?? "Error al analizar. Inténtalo de nuevo.";
+                return is429 ? (
+                  <div className="bg-amber-500/10 border border-amber-500/30 text-amber-400 p-4 rounded-md flex items-center gap-3 text-sm">
+                    <Clock className="w-4 h-4 shrink-0 animate-pulse" />
+                    <p>
+                      {retryCountdown !== null && retryCountdown > 0
+                        ? `Límite de API alcanzado — reintentando en ${retryCountdown}s...`
+                        : "Reintentando análisis..."}
+                    </p>
+                  </div>
                 ) : (
-                  analysis.predictions.map(pred => (
-                    <PredictionRow key={pred.id} prediction={pred} match={match} leagueName={leagueName} />
-                  ))
-                )}
-              </div>
+                  <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-4 rounded-md flex items-start gap-3 text-sm">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <p>{errorMsg}</p>
+                  </div>
+                );
+              })()}
+
+              {/* Analysis results */}
+              {analysis && !isAnalyzing && (
+                <div className="space-y-5">
+                  <div className="flex items-start gap-2 text-sm text-muted-foreground italic bg-secondary/30 p-3 rounded-md border border-border/50">
+                    <Info className="w-4 h-4 mt-0.5 shrink-0 text-primary" />
+                    <p>{analysis.summary}</p>
+                  </div>
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">Mercados Detectados</h4>
+                    {analysis.predictions.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No se encontró valor claro en este evento.</p>
+                    ) : (
+                      analysis.predictions.map(pred => (
+                        <PredictionRow key={pred.id} prediction={pred} match={match} leagueName={leagueName} />
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      )}
-    </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+    </>
   );
 }
 
