@@ -18,14 +18,12 @@ const ALL_FIXTURES_CACHE_KEY = "af_all";
 // ---------------------------------------------------------------------------
 
 const LEAGUE_ID_BY_NAME: Record<string, number> = {
+  // ── Ligas domésticas ──────────────────────────────────────────────────────
   "Premier League": 39,
   "La Liga": 140,
   "Serie A": 135,
   Bundesliga: 78,
   "Ligue 1": 61,
-  "Champions League": 2,
-  "Europa League": 3,
-  "Conference League": 848,
   Eredivisie: 88,
   "Primeira Liga": 94,
   "Süper Lig": 203,
@@ -35,6 +33,24 @@ const LEAGUE_ID_BY_NAME: Record<string, number> = {
   "Liga Profesional": 128,
   Brasileirão: 71,
   "LigaPro Ecuador": 334,
+  // ── Copas nacionales ─────────────────────────────────────────────────────
+  "FA Cup": 45,
+  "Copa del Rey": 143,
+  "Coppa Italia": 137,
+  "DFB-Pokal": 529,
+  "Coupe de France": 66,
+  "KNVB Beker": 210,
+  "Copa do Brasil": 73,
+  "Copa Argentina": 130,
+  "Copa BetPlay": 240,
+  // ── Copas internacionales / continentales ─────────────────────────────────
+  "Champions League": 2,
+  "Europa League": 3,
+  "Conference League": 848,
+  "Copa Libertadores": 13,
+  "Copa Sudamericana": 11,
+  // ── Selecciones ───────────────────────────────────────────────────────────
+  "Copa Mundial FIFA": 1,
 };
 
 /** Reverse map: API-Football league ID → our display name */

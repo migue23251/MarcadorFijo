@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { 
   useGetMe, 
   getGetMeQueryKey, 
@@ -18,24 +18,42 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import * as Dialog from "@radix-ui/react-dialog";
 
-const AVAILABLE_LEAGUES = [
-  { id: "premier_league",    label: "Premier League",    flag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿" },
-  { id: "la_liga",           label: "La Liga",            flag: "🇪🇸" },
-  { id: "bundesliga",        label: "Bundesliga",         flag: "🇩🇪" },
-  { id: "serie_a",           label: "Serie A",            flag: "🇮🇹" },
-  { id: "ligue_1",           label: "Ligue 1",            flag: "🇫🇷" },
-  { id: "champions_league",  label: "Champions League",   flag: "⭐" },
-  { id: "europa_league",     label: "Europa League",      flag: "🟠" },
-  { id: "conference_league", label: "Conference League",  flag: "🔵" },
-  { id: "eredivisie",        label: "Eredivisie",         flag: "🇳🇱" },
-  { id: "primeira_liga",     label: "Primeira Liga",      flag: "🇵🇹" },
-  { id: "super_lig",         label: "Süper Lig",          flag: "🇹🇷" },
-  { id: "mls",               label: "MLS",                flag: "🇺🇸" },
-  { id: "liga_mx",           label: "Liga MX",            flag: "🇲🇽" },
-  { id: "liga_betplay",      label: "Liga BetPlay",       flag: "🇨🇴" },
-  { id: "liga_profesional",  label: "Liga Profesional",   flag: "🇦🇷" },
-  { id: "brasileirao",       label: "Brasileirão",        flag: "🇧🇷" },
-  { id: "ligapro_ecuador",   label: "LigaPro Ecuador",    flag: "🇪🇨" },
+const LIGAS = [
+  { id: "premier_league",   label: "Premier League",   flag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿" },
+  { id: "la_liga",          label: "La Liga",           flag: "🇪🇸" },
+  { id: "bundesliga",       label: "Bundesliga",        flag: "🇩🇪" },
+  { id: "serie_a",          label: "Serie A",           flag: "🇮🇹" },
+  { id: "ligue_1",          label: "Ligue 1",           flag: "🇫🇷" },
+  { id: "eredivisie",       label: "Eredivisie",        flag: "🇳🇱" },
+  { id: "primeira_liga",    label: "Primeira Liga",     flag: "🇵🇹" },
+  { id: "super_lig",        label: "Süper Lig",         flag: "🇹🇷" },
+  { id: "mls",              label: "MLS",               flag: "🇺🇸" },
+  { id: "liga_mx",          label: "Liga MX",           flag: "🇲🇽" },
+  { id: "liga_betplay",     label: "Liga BetPlay",      flag: "🇨🇴" },
+  { id: "liga_profesional", label: "Liga Profesional",  flag: "🇦🇷" },
+  { id: "brasileirao",      label: "Brasileirão",       flag: "🇧🇷" },
+  { id: "ligapro_ecuador",  label: "LigaPro Ecuador",   flag: "🇪🇨" },
+];
+
+const COPAS = [
+  // Nacionales
+  { id: "fa_cup",           label: "FA Cup",            flag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿" },
+  { id: "copa_del_rey",     label: "Copa del Rey",      flag: "🇪🇸" },
+  { id: "coppa_italia",     label: "Coppa Italia",      flag: "🇮🇹" },
+  { id: "dfb_pokal",        label: "DFB-Pokal",         flag: "🇩🇪" },
+  { id: "coupe_de_france",  label: "Coupe de France",   flag: "🇫🇷" },
+  { id: "knvb_beker",       label: "KNVB Beker",        flag: "🇳🇱" },
+  { id: "copa_do_brasil",   label: "Copa do Brasil",    flag: "🇧🇷" },
+  { id: "copa_argentina",   label: "Copa Argentina",    flag: "🇦🇷" },
+  { id: "copa_betplay",     label: "Copa BetPlay",      flag: "🇨🇴" },
+  // Internacionales
+  { id: "champions_league", label: "Champions League",  flag: "⭐" },
+  { id: "europa_league",    label: "Europa League",     flag: "🟠" },
+  { id: "conference_league",label: "Conference League", flag: "🔵" },
+  { id: "libertadores",     label: "Copa Libertadores", flag: "🏆" },
+  { id: "sudamericana",     label: "Copa Sudamericana", flag: "🌎" },
+  // Selecciones
+  { id: "mundial",          label: "Copa Mundial FIFA", flag: "🌍" },
 ];
 
 function Badge({ children, variant = "default", className = "" }: { children: React.ReactNode, variant?: "default" | "success" | "warning" | "danger" | "outline" | "live", className?: string }) {
@@ -65,6 +83,89 @@ function StatusBadge({ status }: { status: string }) {
   }
 }
 
+function readLS<T>(key: string, fallback: T): T {
+  try { const s = localStorage.getItem(key); return s ? (JSON.parse(s) as T) : fallback; } catch { return fallback; }
+}
+
+type SelectOption = { id: string; label: string; flag: string };
+
+function MultiSelectDropdown({
+  label,
+  options,
+  selected,
+  onChange,
+}: {
+  label: string;
+  options: SelectOption[];
+  selected: string[];
+  onChange: (v: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const toggle = (lbl: string) =>
+    onChange(selected.includes(lbl) ? selected.filter(s => s !== lbl) : [...selected, lbl]);
+
+  const allSelected = selected.length === options.length;
+
+  return (
+    <div ref={ref} className="relative flex-1 min-w-0">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-secondary border border-border rounded-lg text-sm font-medium hover:border-primary/50 transition-colors"
+      >
+        <span className="flex items-center gap-2 min-w-0">
+          <span className="text-muted-foreground">{label}:</span>
+          <span className={`truncate ${selected.length > 0 ? "text-primary" : "text-muted-foreground"}`}>
+            {selected.length === 0 ? "Todas" : selected.length === 1 ? selected[0] : `${selected.length} seleccionadas`}
+          </span>
+        </span>
+        <ChevronDown className={`w-4 h-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute top-full mt-1 left-0 right-0 z-50 bg-card border border-border rounded-lg shadow-xl overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-secondary/40">
+            <span className="text-xs text-muted-foreground font-medium">{selected.length} / {options.length}</span>
+            <button
+              onClick={() => onChange(allSelected ? [] : options.map(o => o.label))}
+              className="text-xs text-primary hover:text-primary/80 transition-colors"
+            >
+              {allSelected ? "Limpiar todo" : "Seleccionar todo"}
+            </button>
+          </div>
+          <div className="max-h-56 overflow-y-auto">
+            {options.map(opt => {
+              const checked = selected.includes(opt.label);
+              return (
+                <button
+                  key={opt.id}
+                  onClick={() => toggle(opt.label)}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors hover:bg-secondary/60 ${checked ? "bg-primary/10" : ""}`}
+                >
+                  <span className={`w-4 h-4 shrink-0 rounded border flex items-center justify-center text-[10px] transition-colors ${checked ? "bg-primary border-primary text-primary-foreground" : "border-border"}`}>
+                    {checked && <Check className="w-3 h-3" />}
+                  </span>
+                  <span>{opt.flag}</span>
+                  <span className={checked ? "text-foreground font-medium" : "text-muted-foreground"}>{opt.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -72,26 +173,34 @@ export default function Dashboard() {
   const { data: me } = useGetMe({ query: { queryKey: getGetMeQueryKey() } });
 
   const radarMutation = useRadarMatches();
-  const [selectedLeagues, setSelectedLeagues] = useState<string[]>([]);
+  const [selectedLeagues, setSelectedLeagues] = useState<string[]>(() => readLS("rb_leagues", []));
+  const [selectedCups, setSelectedCups] = useState<string[]>(() => readLS("rb_cups", []));
+  const [persistedResults, setPersistedResults] = useState<typeof radarMutation.data>(() => readLS("rb_radar", undefined));
   const radarRequestLockedRef = useRef(false);
 
-  const toggleLeague = (label: string) => {
-    setSelectedLeagues(prev =>
-      prev.includes(label) ? prev.filter(l => l !== label) : [...prev, label]
-    );
-  };
+  useEffect(() => {
+    try { localStorage.setItem("rb_leagues", JSON.stringify(selectedLeagues)); } catch {}
+  }, [selectedLeagues]);
+
+  useEffect(() => {
+    try { localStorage.setItem("rb_cups", JSON.stringify(selectedCups)); } catch {}
+  }, [selectedCups]);
 
   const handleRadarScan = useCallback(() => {
     if (radarRequestLockedRef.current || radarMutation.isPending) return;
     radarRequestLockedRef.current = true;
-    radarMutation.mutate({
-      data: {
-        leagues: selectedLeagues.length > 0 ? [...selectedLeagues] : undefined,
+    const combined = [...selectedLeagues, ...selectedCups];
+    radarMutation.mutate(
+      { data: { leagues: combined.length > 0 ? combined : undefined } },
+      {
+        onSuccess: (data) => {
+          setPersistedResults(data);
+          try { localStorage.setItem("rb_radar", JSON.stringify(data)); } catch {}
+        },
+        onSettled: () => { radarRequestLockedRef.current = false; },
       },
-    }, {
-      onSettled: () => { radarRequestLockedRef.current = false; },
-    });
-  }, [radarMutation, selectedLeagues]);
+    );
+  }, [radarMutation, selectedLeagues, selectedCups]);
 
   const isActive = me?.activeSubscription;
 
@@ -112,50 +221,33 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {/* League selector */}
+      {/* Selector de competiciones */}
       <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Trophy className="w-4 h-4 text-primary" />
-            <span className="text-sm font-semibold">Ligas a escanear</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {selectedLeagues.length > 0 && (
-              <Badge variant="default">{selectedLeagues.length} seleccionada{selectedLeagues.length !== 1 ? "s" : ""}</Badge>
-            )}
-            <button
-              onClick={() => setSelectedLeagues([])}
-              className={`text-xs transition-colors ${selectedLeagues.length > 0 ? "text-primary hover:text-primary/80 cursor-pointer" : "text-muted-foreground/40 cursor-default"}`}
-              disabled={selectedLeagues.length === 0}
-            >
-              Todas
-            </button>
-          </div>
+        <div className="flex items-center gap-2">
+          <Trophy className="w-4 h-4 text-primary" />
+          <span className="text-sm font-semibold">Competiciones a escanear</span>
+          {(selectedLeagues.length > 0 || selectedCups.length > 0) && (
+            <Badge variant="default">{selectedLeagues.length + selectedCups.length} seleccionada{selectedLeagues.length + selectedCups.length !== 1 ? "s" : ""}</Badge>
+          )}
         </div>
-        <div className="flex flex-wrap gap-2">
-          {AVAILABLE_LEAGUES.map(league => {
-            const active = selectedLeagues.includes(league.label);
-            return (
-              <button
-                key={league.id}
-                onClick={() => toggleLeague(league.label)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all duration-150 ${
-                  active
-                    ? "bg-primary/20 border-primary/60 text-primary"
-                    : "bg-secondary border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                }`}
-              >
-                <span>{league.flag}</span>
-                <span>{league.label}</span>
-                {active && <Check className="w-3 h-3 ml-0.5" />}
-              </button>
-            );
-          })}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <MultiSelectDropdown
+            label="Ligas"
+            options={LIGAS}
+            selected={selectedLeagues}
+            onChange={setSelectedLeagues}
+          />
+          <MultiSelectDropdown
+            label="Copas"
+            options={COPAS}
+            selected={selectedCups}
+            onChange={setSelectedCups}
+          />
         </div>
         <p className="text-xs text-muted-foreground">
-          {selectedLeagues.length === 0
-            ? "Sin selección: el radar buscará en todas las ligas disponibles."
-            : `El radar buscará partidos en: ${selectedLeagues.join(", ")}.`}
+          {selectedLeagues.length === 0 && selectedCups.length === 0
+            ? "Sin selección: el radar buscará en todas las competiciones disponibles."
+            : `Escaneando: ${[...selectedLeagues, ...selectedCups].join(", ")}.`}
         </p>
       </div>
 
@@ -215,30 +307,40 @@ export default function Dashboard() {
         );
       })()}
 
-      {radarMutation.isSuccess && radarMutation.data && (
-        <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-700">
-          <div className="flex items-center gap-2 border-b border-border pb-2">
-            <Target className="w-5 h-5 text-primary" />
-            <h2 className="text-xl font-semibold">Objetivos Detectados</h2>
-            <Badge className="ml-2">{radarMutation.data.reduce((acc, league) => acc + league.matches.length, 0)} Partidos</Badge>
-          </div>
+      {(() => {
+        const results = radarMutation.data ?? persistedResults;
+        if (!results) return null;
+        const isStale = !radarMutation.isSuccess && !!persistedResults;
+        return (
+          <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-700">
+            <div className="flex items-center gap-2 border-b border-border pb-2 flex-wrap">
+              <Target className="w-5 h-5 text-primary" />
+              <h2 className="text-xl font-semibold">Objetivos Detectados</h2>
+              <Badge className="ml-2">{results.reduce((acc, l) => acc + l.matches.length, 0)} Partidos</Badge>
+              {isStale && (
+                <span className="ml-auto text-xs text-muted-foreground flex items-center gap-1">
+                  <RefreshCw className="w-3 h-3" /> Última búsqueda guardada — presiona Radar para actualizar
+                </span>
+              )}
+            </div>
 
-          {radarMutation.data.length === 0 ? (
-            <p className="text-muted-foreground text-center py-12 bg-card rounded-md border border-border">No se encontraron partidos hoy en las ligas seleccionadas.</p>
-          ) : (
-            radarMutation.data.map((league, idx) => (
-              <div key={league.league} className={`space-y-4 stagger-${(idx % 5) + 1}`}>
-                <h3 className="text-sm font-semibold tracking-wider text-muted-foreground uppercase">{league.league}</h3>
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                  {league.matches.map(match => (
-                    <MatchCard key={match.id} match={match} leagueName={league.league} />
-                  ))}
+            {results.length === 0 ? (
+              <p className="text-muted-foreground text-center py-12 bg-card rounded-md border border-border">No se encontraron partidos hoy en las competiciones seleccionadas.</p>
+            ) : (
+              results.map((league, idx) => (
+                <div key={league.league} className={`space-y-4 stagger-${(idx % 5) + 1}`}>
+                  <h3 className="text-sm font-semibold tracking-wider text-muted-foreground uppercase">{league.league}</h3>
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                    {league.matches.map(match => (
+                      <MatchCard key={match.id} match={match} leagueName={league.league} />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))
-          )}
-        </div>
-      )}
+              ))
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
