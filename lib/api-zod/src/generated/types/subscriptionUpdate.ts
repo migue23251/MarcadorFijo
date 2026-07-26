@@ -5,9 +5,11 @@
  * Football betting prediction API
  * OpenAPI spec version: 0.1.0
  */
+import type { SubscriptionUpdateSubscriptionPlan } from './subscriptionUpdateSubscriptionPlan';
 
 export interface SubscriptionUpdate {
   activeSubscription: boolean;
   /** @nullable */
   subscriptionExpiresAt?: string | null;
+  subscriptionPlan?: SubscriptionUpdateSubscriptionPlan;
 }

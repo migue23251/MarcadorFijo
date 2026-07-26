@@ -17,6 +17,17 @@ export const UserProfileRole = {
   admin: 'admin',
 } as const;
 
+export type UserProfileSubscriptionPlan = typeof UserProfileSubscriptionPlan[keyof typeof UserProfileSubscriptionPlan];
+
+
+export const UserProfileSubscriptionPlan = {
+  mensual: 'mensual',
+  trimestral: 'trimestral',
+  semestral: 'semestral',
+  anual: 'anual',
+  free: 'free',
+} as const;
+
 export interface UserProfile {
   clerkId: string;
   email: string;
@@ -28,6 +39,12 @@ export interface UserProfile {
   activeSubscription: boolean;
   /** @nullable */
   subscriptionExpiresAt?: string | null;
+  subscriptionPlan: UserProfileSubscriptionPlan;
+  /** True when subscriptionExpiresAt is later than the current time. */
+  isSubscriptionActive: boolean;
+  dailyFreeAnalysesUsed: number;
+  /** @nullable */
+  lastAnalysisDate?: string | null;
   createdAt?: string;
 }
 
@@ -37,10 +54,30 @@ export interface UserProfileUpdate {
   currency?: string;
 }
 
+export type SubscriptionUpdateSubscriptionPlan = typeof SubscriptionUpdateSubscriptionPlan[keyof typeof SubscriptionUpdateSubscriptionPlan];
+
+
+export const SubscriptionUpdateSubscriptionPlan = {
+  mensual: 'mensual',
+  trimestral: 'trimestral',
+  semestral: 'semestral',
+  anual: 'anual',
+  free: 'free',
+} as const;
+
 export interface SubscriptionUpdate {
   activeSubscription: boolean;
   /** @nullable */
   subscriptionExpiresAt?: string | null;
+  subscriptionPlan?: SubscriptionUpdateSubscriptionPlan;
+}
+
+export interface AdminSettings {
+  freemiumEnabled: boolean;
+}
+
+export interface AdminSettingsUpdate {
+  freemiumEnabled: boolean;
 }
 
 export interface RadarInput {

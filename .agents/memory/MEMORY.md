@@ -1,1 +1,2 @@
 - [Imported Clerk setup](clerk-import-setup.md) — preserve external auth credentials and keep public pages usable when auth setup is deferred.
+- [Subscription state](subscription-state.md) — treat the expiry timestamp as the source of truth for active access while preserving legacy flags during rollout.

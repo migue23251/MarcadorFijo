@@ -10,6 +10,10 @@ export interface AuthenticatedRequest extends Request {
   dbUser: User;
 }
 
+export function isSubscriptionCurrentlyActive(expiresAt: Date | null): boolean {
+  return expiresAt !== null && expiresAt.getTime() > Date.now();
+}
+
 let _clerkClient: ReturnType<typeof createClerkClient> | null = null;
 
 function getClerkClient() {
@@ -24,6 +28,11 @@ export async function requireAuth(
   res: Response,
   next: NextFunction,
 ): Promise<void> {
+  if (!process.env.CLERK_SECRET_KEY) {
+    res.status(401).json({ error: "Autenticación no configurada en este entorno" });
+    return;
+  }
+
   const auth = getAuth(req);
   const clerkId = auth?.userId;
 
@@ -63,6 +72,11 @@ export async function requireAuth(
         email,
         role: isFirstUser ? "admin" : "user",
         activeSubscription: isFirstUser,
+        subscriptionPlan: isFirstUser ? "anual" : "free",
+        subscriptionExpiresAt: isFirstUser
+          ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
+          : null,
+        isSubscriptionActive: isFirstUser,
       })
       .returning();
 
@@ -92,7 +106,7 @@ export function requireSubscription(
   next: NextFunction,
 ): void {
   const dbUser = (req as AuthenticatedRequest).dbUser;
-  if (!dbUser?.activeSubscription) {
+  if (!dbUser?.activeSubscription || !isSubscriptionCurrentlyActive(dbUser.subscriptionExpiresAt)) {
     res.status(403).json({ error: "Se requiere suscripción activa" });
     return;
   }

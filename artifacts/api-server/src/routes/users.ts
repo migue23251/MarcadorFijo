@@ -13,26 +13,46 @@ import {
 import {
   requireAuth,
   requireAdmin,
+  isSubscriptionCurrentlyActive,
   type AuthenticatedRequest,
 } from "../lib/auth";
 
 const router: IRouter = Router();
 
+const PLAN_DURATION_MONTHS: Record<string, number> = {
+  mensual: 1,
+  trimestral: 3,
+  semestral: 6,
+  anual: 12,
+};
+
+function defaultSubscriptionExpiry(plan: string): Date {
+  const expiresAt = new Date();
+  expiresAt.setMonth(expiresAt.getMonth() + (PLAN_DURATION_MONTHS[plan] ?? 1));
+  return expiresAt;
+}
+
+function userProfileResponse(user: typeof usersTable.$inferSelect) {
+  return {
+    clerkId: user.clerkId,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    currency: user.currency,
+    activeSubscription: user.activeSubscription,
+    subscriptionExpiresAt: user.subscriptionExpiresAt?.toISOString() ?? null,
+    subscriptionPlan: user.subscriptionPlan,
+    isSubscriptionActive: isSubscriptionCurrentlyActive(user.subscriptionExpiresAt),
+    dailyFreeAnalysesUsed: user.dailyFreeAnalysesUsed,
+    lastAnalysisDate: user.lastAnalysisDate,
+    createdAt: user.createdAt.toISOString(),
+  };
+}
+
 // GET /users/me
 router.get("/users/me", requireAuth, async (req, res): Promise<void> => {
   const user = (req as AuthenticatedRequest).dbUser;
-  res.json(
-    GetMeResponse.parse({
-      clerkId: user.clerkId,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      currency: user.currency,
-      activeSubscription: user.activeSubscription,
-      subscriptionExpiresAt: user.subscriptionExpiresAt?.toISOString() ?? null,
-      createdAt: user.createdAt.toISOString(),
-    }),
-  );
+  res.json(GetMeResponse.parse(userProfileResponse(user)));
 });
 
 // PUT /users/me
@@ -53,18 +73,7 @@ router.put("/users/me", requireAuth, async (req, res): Promise<void> => {
     .where(eq(usersTable.clerkId, user.clerkId))
     .returning();
 
-  res.json(
-    UpdateMeResponse.parse({
-      clerkId: updated.clerkId,
-      email: updated.email,
-      name: updated.name,
-      role: updated.role,
-      currency: updated.currency,
-      activeSubscription: updated.activeSubscription,
-      subscriptionExpiresAt: updated.subscriptionExpiresAt?.toISOString() ?? null,
-      createdAt: updated.createdAt.toISOString(),
-    }),
-  );
+  res.json(UpdateMeResponse.parse(userProfileResponse(updated)));
 });
 
 // GET /users (admin only)
@@ -80,15 +89,7 @@ router.get(
 
     res.json(
       ListUsersResponse.parse(
-        users.map((u) => ({
-          clerkId: u.clerkId,
-          email: u.email,
-          name: u.name,
-          role: u.role,
-          activeSubscription: u.activeSubscription,
-          subscriptionExpiresAt: u.subscriptionExpiresAt?.toISOString() ?? null,
-          createdAt: u.createdAt.toISOString(),
-        })),
+        users.map(userProfileResponse),
       ),
     );
   },
@@ -115,12 +116,18 @@ router.put(
     const expiresAt = body.data.subscriptionExpiresAt
       ? new Date(body.data.subscriptionExpiresAt)
       : null;
+    const plan = body.data.subscriptionPlan ?? "mensual";
+    const effectiveExpiresAt = body.data.activeSubscription
+      ? expiresAt ?? defaultSubscriptionExpiry(plan)
+      : null;
 
     const [updated] = await db
       .update(usersTable)
       .set({
         activeSubscription: body.data.activeSubscription,
-        subscriptionExpiresAt: expiresAt ?? undefined,
+        subscriptionExpiresAt: effectiveExpiresAt,
+        subscriptionPlan: body.data.activeSubscription ? plan : "free",
+        isSubscriptionActive: isSubscriptionCurrentlyActive(effectiveExpiresAt),
       })
       .where(eq(usersTable.clerkId, params.data.userId))
       .returning();
@@ -130,17 +137,7 @@ router.put(
       return;
     }
 
-    res.json(
-      UpdateUserSubscriptionResponse.parse({
-        clerkId: updated.clerkId,
-        email: updated.email,
-        name: updated.name,
-        role: updated.role,
-        activeSubscription: updated.activeSubscription,
-        subscriptionExpiresAt: updated.subscriptionExpiresAt?.toISOString() ?? null,
-        createdAt: updated.createdAt.toISOString(),
-      }),
-    );
+    res.json(UpdateUserSubscriptionResponse.parse(userProfileResponse(updated)));
   },
 );
 

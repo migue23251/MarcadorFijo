@@ -16,6 +16,8 @@ tags:
     description: Match radar and analysis
   - name: bets
     description: Bet management
+  - name: admin
+    description: Administrative settings
 
 paths:
   /healthz:
@@ -115,6 +117,46 @@ paths:
           description: Forbidden
         "404":
           description: User not found
+
+  /admin/settings:
+    get:
+      operationId: getAdminSettings
+      tags: [admin]
+      summary: Get global administration settings
+      responses:
+        "200":
+          description: Global administration settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSettings"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+    post:
+      operationId: updateAdminSettings
+      tags: [admin]
+      summary: Update global administration settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminSettingsUpdate"
+      responses:
+        "200":
+          description: Updated global administration settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSettings"
+        "400":
+          description: Invalid settings
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
 
   /matches/radar:
     post:
@@ -345,6 +387,9 @@ components:
         - role
         - activeSubscription
         - currency
+        - subscriptionPlan
+        - isSubscriptionActive
+        - dailyFreeAnalysesUsed
       properties:
         clerkId:
           type: string
@@ -362,6 +407,16 @@ components:
         activeSubscription:
           type: boolean
         subscriptionExpiresAt:
+          type: ["string", "null"]
+        subscriptionPlan:
+          type: string
+          enum: [mensual, trimestral, semestral, anual, free]
+        isSubscriptionActive:
+          type: boolean
+          description: "True when subscriptionExpiresAt is later than the current time."
+        dailyFreeAnalysesUsed:
+          type: integer
+        lastAnalysisDate:
           type: ["string", "null"]
         createdAt:
           type: string
@@ -384,6 +439,25 @@ components:
           type: boolean
         subscriptionExpiresAt:
           type: ["string", "null"]
+        subscriptionPlan:
+          type: string
+          enum: [mensual, trimestral, semestral, anual, free]
+
+    AdminSettings:
+      type: object
+      required:
+        - freemiumEnabled
+      properties:
+        freemiumEnabled:
+          type: boolean
+
+    AdminSettingsUpdate:
+      type: object
+      required:
+        - freemiumEnabled
+      properties:
+        freemiumEnabled:
+          type: boolean
 
     RadarInput:
       type: object

@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './adminSettings';
+export * from './adminSettingsUpdate';
 export * from './analyzeInput';
 export * from './bet';
 export * from './betInput';
@@ -25,6 +27,8 @@ export * from './prediction';
 export * from './predictionConfidence';
 export * from './radarInput';
 export * from './subscriptionUpdate';
+export * from './subscriptionUpdateSubscriptionPlan';
 export * from './userProfile';
 export * from './userProfileRole';
+export * from './userProfileSubscriptionPlan';
 export * from './userProfileUpdate';

@@ -30,6 +30,10 @@ export const GetMeResponse = zod.object({
   "currency": zod.string().default(getMeResponseCurrencyDefault).describe('Currency code for displaying amounts (e.g. COP, USD, EUR)'),
   "activeSubscription": zod.boolean(),
   "subscriptionExpiresAt": zod.string().nullish(),
+  "subscriptionPlan": zod.enum(['mensual', 'trimestral', 'semestral', 'anual', 'free']),
+  "isSubscriptionActive": zod.boolean().describe('True when subscriptionExpiresAt is later than the current time.'),
+  "dailyFreeAnalysesUsed": zod.number(),
+  "lastAnalysisDate": zod.string().nullish(),
   "createdAt": zod.string().optional()
 })
 
@@ -52,6 +56,10 @@ export const UpdateMeResponse = zod.object({
   "currency": zod.string().default(updateMeResponseCurrencyDefault).describe('Currency code for displaying amounts (e.g. COP, USD, EUR)'),
   "activeSubscription": zod.boolean(),
   "subscriptionExpiresAt": zod.string().nullish(),
+  "subscriptionPlan": zod.enum(['mensual', 'trimestral', 'semestral', 'anual', 'free']),
+  "isSubscriptionActive": zod.boolean().describe('True when subscriptionExpiresAt is later than the current time.'),
+  "dailyFreeAnalysesUsed": zod.number(),
+  "lastAnalysisDate": zod.string().nullish(),
   "createdAt": zod.string().optional()
 })
 
@@ -69,6 +77,10 @@ export const ListUsersResponseItem = zod.object({
   "currency": zod.string().default(listUsersResponseCurrencyDefault).describe('Currency code for displaying amounts (e.g. COP, USD, EUR)'),
   "activeSubscription": zod.boolean(),
   "subscriptionExpiresAt": zod.string().nullish(),
+  "subscriptionPlan": zod.enum(['mensual', 'trimestral', 'semestral', 'anual', 'free']),
+  "isSubscriptionActive": zod.boolean().describe('True when subscriptionExpiresAt is later than the current time.'),
+  "dailyFreeAnalysesUsed": zod.number(),
+  "lastAnalysisDate": zod.string().nullish(),
   "createdAt": zod.string().optional()
 })
 export const ListUsersResponse = zod.array(ListUsersResponseItem)
@@ -83,7 +95,8 @@ export const UpdateUserSubscriptionParams = zod.object({
 
 export const UpdateUserSubscriptionBody = zod.object({
   "activeSubscription": zod.boolean(),
-  "subscriptionExpiresAt": zod.string().nullish()
+  "subscriptionExpiresAt": zod.string().nullish(),
+  "subscriptionPlan": zod.enum(['mensual', 'trimestral', 'semestral', 'anual', 'free']).optional()
 })
 
 export const updateUserSubscriptionResponseCurrencyDefault = `COP`;
@@ -96,7 +109,31 @@ export const UpdateUserSubscriptionResponse = zod.object({
   "currency": zod.string().default(updateUserSubscriptionResponseCurrencyDefault).describe('Currency code for displaying amounts (e.g. COP, USD, EUR)'),
   "activeSubscription": zod.boolean(),
   "subscriptionExpiresAt": zod.string().nullish(),
+  "subscriptionPlan": zod.enum(['mensual', 'trimestral', 'semestral', 'anual', 'free']),
+  "isSubscriptionActive": zod.boolean().describe('True when subscriptionExpiresAt is later than the current time.'),
+  "dailyFreeAnalysesUsed": zod.number(),
+  "lastAnalysisDate": zod.string().nullish(),
   "createdAt": zod.string().optional()
+})
+
+
+/**
+ * @summary Get global administration settings
+ */
+export const GetAdminSettingsResponse = zod.object({
+  "freemiumEnabled": zod.boolean()
+})
+
+
+/**
+ * @summary Update global administration settings
+ */
+export const UpdateAdminSettingsBody = zod.object({
+  "freemiumEnabled": zod.boolean()
+})
+
+export const UpdateAdminSettingsResponse = zod.object({
+  "freemiumEnabled": zod.boolean()
 })
 
 

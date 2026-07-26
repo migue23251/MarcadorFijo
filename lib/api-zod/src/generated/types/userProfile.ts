@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { UserProfileRole } from './userProfileRole';
+import type { UserProfileSubscriptionPlan } from './userProfileSubscriptionPlan';
 
 export interface UserProfile {
   clerkId: string;
@@ -18,5 +19,11 @@ export interface UserProfile {
   activeSubscription: boolean;
   /** @nullable */
   subscriptionExpiresAt?: string | null;
+  subscriptionPlan: UserProfileSubscriptionPlan;
+  /** True when subscriptionExpiresAt is later than the current time. */
+  isSubscriptionActive: boolean;
+  dailyFreeAnalysesUsed: number;
+  /** @nullable */
+  lastAnalysisDate?: string | null;
   createdAt?: string;
 }

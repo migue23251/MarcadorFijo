@@ -8,8 +8,56 @@ import { Router, type IRouter } from "express";
 import { requireAuth, requireAdmin } from "../lib/auth";
 import { verificarResultadosDelDia } from "../services/resultChecker";
 import { logger } from "../lib/logger";
+import { db, systemSettingsTable } from "@workspace/db";
+import { GetAdminSettingsResponse, UpdateAdminSettingsBody } from "@workspace/api-zod";
+import { eq } from "drizzle-orm";
 
 const router: IRouter = Router();
+
+async function getOrCreateSettings() {
+  const [existing] = await db.select().from(systemSettingsTable).where(eq(systemSettingsTable.id, 1)).limit(1);
+  if (existing) return existing;
+  const [created] = await db.insert(systemSettingsTable).values({ id: 1, freemiumEnabled: true }).returning();
+  return created;
+}
+
+router.get(
+  "/admin/settings",
+  requireAuth,
+  requireAdmin,
+  async (_req, res): Promise<void> => {
+    const settings = await getOrCreateSettings();
+    res.json(GetAdminSettingsResponse.parse({
+      freemiumEnabled: settings.freemiumEnabled,
+    }));
+  },
+);
+
+router.post(
+  "/admin/settings",
+  requireAuth,
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const parsed = UpdateAdminSettingsBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+
+    const [updated] = await db
+      .insert(systemSettingsTable)
+      .values({ id: 1, freemiumEnabled: parsed.data.freemiumEnabled })
+      .onConflictDoUpdate({
+        target: systemSettingsTable.id,
+        set: { freemiumEnabled: parsed.data.freemiumEnabled },
+      })
+      .returning();
+
+    res.json(GetAdminSettingsResponse.parse({
+      freemiumEnabled: updated.freemiumEnabled,
+    }));
+  },
+);
 
 /**
  * POST /admin/verificar-resultados

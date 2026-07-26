@@ -5,12 +5,16 @@ import {
   useListUsers, 
   getListUsersQueryKey,
   useUpdateUserSubscription,
+  useGetAdminSettings,
+  getGetAdminSettingsQueryKey,
+  useUpdateAdminSettings,
   UserProfile
 } from "@workspace/api-client-react";
 import { Redirect } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Shield, Users, Loader2, RefreshCw, CheckCircle2, XCircle, AlertTriangle, HelpCircle } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 export default function Admin() {
   const { data: me, isLoading: meLoading } = useGetMe({ query: { queryKey: getGetMeQueryKey() } });
@@ -120,6 +124,7 @@ function AdminPanel() {
         </div>
       </header>
 
+      <FreemiumSettingsPanel />
       <ResultVerificationPanel />
 
       <div className="bg-card border border-border rounded-xl overflow-hidden">
@@ -157,6 +162,64 @@ function AdminPanel() {
         )}
       </div>
     </div>
+  );
+}
+
+function FreemiumSettingsPanel() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: settings, isLoading } = useGetAdminSettings({
+    query: { queryKey: getGetAdminSettingsQueryKey() },
+  });
+  const updateSettings = useUpdateAdminSettings();
+
+  const handleFreemiumChange = (freemiumEnabled: boolean) => {
+    updateSettings.mutate(
+      { data: { freemiumEnabled } },
+      {
+        onSuccess: (updated) => {
+          queryClient.setQueryData(getGetAdminSettingsQueryKey(), updated);
+          toast({
+            title: "Configuración actualizada",
+            description: updated.freemiumEnabled
+              ? "El acceso freemium está habilitado."
+              : "El acceso freemium está inhabilitado.",
+          });
+        },
+        onError: () => {
+          toast({
+            title: "No se pudo actualizar",
+            description: "Verifica la conexión e inténtalo de nuevo.",
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
+
+  return (
+    <section className="bg-card border border-border rounded-xl p-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+        <div>
+          <h2 className="text-lg font-bold tracking-tight">Acceso freemium</h2>
+          <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
+            Permite que los usuarios del plan gratuito utilicen el límite diario de análisis.
+            El cambio se aplica inmediatamente a las nuevas solicitudes.
+          </p>
+        </div>
+        <label className="inline-flex items-center gap-3 cursor-pointer shrink-0">
+          <span className="text-sm font-semibold text-foreground">
+            {isLoading ? "Cargando…" : settings?.freemiumEnabled ? "Habilitado" : "Inhabilitado"}
+          </span>
+          <Switch
+            checked={settings?.freemiumEnabled ?? false}
+            onCheckedChange={handleFreemiumChange}
+            disabled={isLoading || updateSettings.isPending}
+            aria-label="Habilitar o inhabilitar acceso freemium"
+          />
+        </label>
+      </div>
+    </section>
   );
 }
 
