@@ -47,18 +47,24 @@ const STEPS = [
   {
     icon: ScanSearch,
     step: "01",
-    title: "Escanea",
-    desc: "Introduce el partido y dejamos que los datos hablen. Rastreamos forma reciente, lesiones, H2H y estadísticas avanzadas de las mejores ligas del mundo.",
+    title: "Escanea tus torneos",
+    desc: "Selecciona las ligas y competiciones que sigues. Cubrimos las principales ligas del mundo para que nunca te falte contexto.",
+  },
+  {
+    icon: Target,
+    step: "02",
+    title: "Selecciona el partido",
+    desc: "Elige el encuentro que quieres analizar y deja que los datos hablen. Rastreamos forma reciente, lesiones, H2H y métricas avanzadas en segundos.",
   },
   {
     icon: BrainCircuit,
-    step: "02",
+    step: "03",
     title: "Analiza con IA",
-    desc: "Nuestro motor de IA cruza cada variable y calcula el valor esperado real de cada mercado. Sin narrativas, solo señal cuantitativa y razonamiento explícito.",
+    desc: "Nuestro motor de IA cruza cada variable y calcula el valor esperado real por mercado. Sin narrativas, solo señal cuantitativa y razonamiento explícito.",
   },
   {
     icon: Wallet,
-    step: "03",
+    step: "04",
     title: "Gestiona tu Apuesta",
     desc: "Registra la apuesta, fija el stake y sigue tu ROI, Yield y tasa de acierto en tiempo real. Tu historial es tu ventaja compuesta.",
   },
@@ -404,7 +410,7 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {STEPS.map(({ icon: Icon, step, title, desc }, i) => (
                 <div
                   key={step}
