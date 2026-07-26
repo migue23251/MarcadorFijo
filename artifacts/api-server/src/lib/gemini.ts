@@ -1,9 +1,7 @@
+import { GoogleGenAI, type GenerateContentResponse } from "@google/genai";
 import { logger } from "./logger";
 import { db, analysisCacheTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
-
-const GEMINI_API_BASE =
-  "https://generativelanguage.googleapis.com/v1beta/models";
 
 interface GeminiPrediction {
   id: string;
@@ -34,54 +32,58 @@ export class GeminiApiError extends Error {
   }
 }
 
+function makeClient(apiKey: string): GoogleGenAI {
+  return new GoogleGenAI({ apiKey });
+}
+
 async function callGemini(
   apiKey: string,
   model: string,
   prompt: string,
 ): Promise<string> {
-  const url = `${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
+  const ai = makeClient(apiKey);
+
+  let response: GenerateContentResponse;
+  try {
+    response = await ai.models.generateContent({
+      model,
+      contents: prompt,
+      config: {
         temperature: 0.7,
         maxOutputTokens: 8192,
         responseMimeType: "application/json",
       },
-    }),
-  });
+    });
+  } catch (err: any) {
+    // The SDK throws an error object; map known HTTP status codes to user messages.
+    const message: string = err?.message ?? String(err);
+    const statusMatch = message.match(/\b(4\d\d|5\d\d)\b/);
+    const status = statusMatch ? parseInt(statusMatch[1], 10) : 500;
 
-  if (!response.ok) {
-    const body = await response.json().catch(() => null) as any;
-    const geminiMessage: string = body?.error?.message ?? "";
-
-    logger.error({ status: response.status, geminiMessage, model }, "Gemini API error");
+    logger.error({ status, message, model }, "Gemini API error");
 
     let userMessage: string;
     let retryAfter: number | undefined;
 
-    if (response.status === 429) {
-      const retryMatch = geminiMessage.match(/retry in ([\d.]+)s/i);
+    if (status === 429) {
+      const retryMatch = message.match(/retry in ([\d.]+)s/i);
       retryAfter = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) + 2 : 60;
       userMessage = `Cuota de Gemini agotada para el modelo "${model}". Intenta de nuevo en ${retryAfter} segundos.`;
-    } else if (response.status === 404) {
+    } else if (status === 404) {
       userMessage = `El modelo "${model}" no existe o no está disponible con tu API Key. Selecciona otro modelo en Configuración.`;
-    } else if (response.status === 400) {
-      userMessage = `Error 400: ${geminiMessage || "API Key de Gemini inválida. Verifica la clave en Configuración."}`;
-    } else if (response.status === 403) {
+    } else if (status === 400) {
+      userMessage = `Error 400: ${message.slice(0, 200) || "API Key de Gemini inválida. Verifica la clave en Configuración."}`;
+    } else if (status === 403) {
       userMessage =
         "API Key de Gemini sin permisos. Verifica que la clave tenga acceso a la API.";
     } else {
-      userMessage = `Error de Gemini (${response.status})${geminiMessage ? `: ${geminiMessage.slice(0, 200)}` : ""}`;
+      userMessage = `Error de Gemini (${status}): ${message.slice(0, 200)}`;
     }
-    throw new GeminiApiError(response.status, userMessage, retryAfter);
+
+    throw new GeminiApiError(status, userMessage, retryAfter);
   }
 
-  const data = await response.json() as any;
-  const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-  return text;
+  return response.text ?? "";
 }
 
 // ---------------------------------------------------------------------------
