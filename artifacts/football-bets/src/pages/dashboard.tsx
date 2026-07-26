@@ -266,13 +266,16 @@ function MatchCard({ match, leagueName }: { match: Match, leagueName: string }) 
   const analysis = match.hasAnalysis ? cachedAnalysisQuery.data : analyzeMutation.data;
   const isAnalyzing = match.hasAnalysis ? cachedAnalysisQuery.isFetching : analyzeMutation.isPending;
 
-  // Disable analysis for finished/postponed/cancelled matches that aren't yet analyzed
+  // Disable analysis for matches that have started or finished
   const isFinished = match.status === "finished" || match.status === "postponed" || match.status === "cancelled";
+  const isStarted = match.status === "live" || match.status === "halftime";
+  // Can't run a new analysis once the match is underway or over; cached result still viewable
+  const cannotAnalyzeNew = isFinished || isStarted;
 
   const handleAnalyze = () => {
     if (analysis) { setExpanded((curr) => !curr); return; }
     if (match.hasAnalysis) { setLoadCached(true); setExpanded(true); return; }
-    if (isFinished) return; // can't predict a finished match
+    if (cannotAnalyzeNew) return; // can't predict a started or finished match
     if (analyzeMutation.isPending || analyzeRequestLockedRef.current) return;
     analyzeRequestLockedRef.current = true;
     setExpanded(true);
@@ -332,8 +335,10 @@ function MatchCard({ match, leagueName }: { match: Match, leagueName: string }) 
         </div>
 
         <div className="ml-2 flex flex-col items-end justify-center shrink-0">
-          {isFinished && !match.hasAnalysis ? (
-            <span className="text-xs text-muted-foreground/50 px-3 py-2">Finalizado</span>
+          {cannotAnalyzeNew && !match.hasAnalysis ? (
+            <span className="text-xs text-muted-foreground/50 px-3 py-2">
+              {isFinished ? "Finalizado" : "En curso"}
+            </span>
           ) : (
             <button
               onClick={handleAnalyze}
@@ -353,6 +358,17 @@ function MatchCard({ match, leagueName }: { match: Match, leagueName: string }) 
           )}
         </div>
       </div>
+
+      {analyzeMutation.isError && (() => {
+        const errData = (analyzeMutation.error as any)?.data as { error?: string } | undefined;
+        const errorMsg = errData?.error ?? (analyzeMutation.error as Error)?.message ?? "Error al analizar. Inténtalo de nuevo.";
+        return (
+          <div className="border-t border-border bg-red-500/5 p-3 flex items-start gap-2 text-sm text-red-400">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <p>{errorMsg}</p>
+          </div>
+        );
+      })()}
 
       {expanded && (isAnalyzing || analysis) && (
         <div className="border-t border-border bg-black/20 p-4 animate-in slide-in-from-top-2 duration-300">
