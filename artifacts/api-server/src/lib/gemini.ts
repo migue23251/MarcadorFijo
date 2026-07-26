@@ -126,6 +126,16 @@ export async function listAvailableModels(apiKey: string): Promise<GeminiModelIn
       const actions: string[] = (model as any).supportedActions ?? [];
       if (!actions.includes("generateContent")) continue;
 
+      // Skip models that can't generate text predictions
+      const nameLower = name.toLowerCase();
+      if (
+        nameLower.includes("embedding") ||
+        nameLower.includes("tts") ||
+        nameLower.includes("imagen") ||
+        nameLower.includes("robotics") ||
+        nameLower.includes("antigravity")
+      ) continue;
+
       const name: string = model.name ?? "";
       // Strip the "models/" prefix to get a clean id like "gemini-2.0-flash"
       const id = name.startsWith("models/") ? name.slice("models/".length) : name;
