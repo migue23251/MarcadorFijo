@@ -1,0 +1,36 @@
+Implementa un sistema automatizado de verificación de resultados de partidos y liquidación de apuestas en el backend utilizando una sola petición diaria a API-Football.
+
+---
+
+### 🎯 OBJETIVO:
+Crear una tarea programada (Cron Job) que se ejecute automáticamente todas las noches para traer todos los marcadores finales del día de API-Football en 1 sola llamada API, actualizar los resultados en la base de datos y evaluar si las Value Bets guardadas por los usuarios se Ganaron, Perdieron o Anularon.
+
+---
+
+### 🛠️ PASOS TÉCNICOS A IMPLEMENTAR:
+
+1. **Instalar Dependencias:**
+   - Instala la librería `node-cron` en el proyecto.
+
+2. **Crear el Servicio de Verificación Nocturna (`services/resultChecker.js`):**
+   - Crea una función `verificarResultadosDelDia()` que:
+     a) Obtenga la fecha actual en formato `YYYY-MM-DD`.
+     b) Haga UNA ÚNICA petición GET al endpoint de API-Football: 
+        `https://v3.football.api-sports.io/fixtures?date=${fechaHoy}&status=FT` (o estados finalizados como AET, PEN).
+     c) Filtre la respuesta para obtener un mapa de resultados: `{ [fixture_id]: { homeScore, awayScore, status } }`.
+     d) Consulte en la base de datos todas las apuestas registradas por los usuarios cuya fecha sea hoy y estén en estado 'PENDIENTE'.
+
+3. **Lógica de Evaluación de Apuestas en JS (Sin llamar a IA ni consumir tokens):**
+   - Implementa una función evaluadora que determine el estado final de la apuesta (`GANADA` o `PERDIDA`):
+     - **Resultado Final (1X2):** Comparar goles local vs visitante con la selección del usuario.
+     - **Over/Under 2.5 Goles:** Sumar goles totales y comparar con el límite 2.5.
+     - **Ambos Anotan (BTTS):** Verificar si ambos equipos hicieron al menos 1 gol.
+     - **Hándicap Asiático/Europeo:** Ajustar los goles locales/visitantes con la línea del hándicap.
+
+4. **Actualización en PostgreSQL:**
+   - Actualiza la tabla de apuestas marcando cada registro con su nuevo estado (`estado = 'GANADA' | 'PERDIDA'`), los goles finales (`marcador_final = '2-1'`) y recalculando el balance/ganancia del usuario.
+
+5. **Configurar el Cron Job (`cron/scheduler.js`):**
+   - Modula el Cron Job para que se ejecute automáticamente todos los días a las 11:30 PM (o 23:30 hs) usando `node-cron` (`30 23 * * *`).
+   - Añade también un endpoint de emergencia solo para administradores `POST /api/admin/verificar-resultados` para poder disparar este proceso manualmente desde el panel de control si es necesario.
+
