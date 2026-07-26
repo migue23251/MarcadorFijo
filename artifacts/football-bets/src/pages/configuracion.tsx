@@ -47,6 +47,12 @@ const GEMINI_MODELS = [
     description: "Flash de generación anterior. Muy económico.",
     badge: null,
   },
+  {
+    id: "gemini-1.5-flash-001",
+    label: "Gemini 1.5 Flash 001",
+    description: "Versión estable específica del 1.5 Flash. Útil si el alias genérico da cuota agotada.",
+    badge: "Prueba",
+  },
 ];
 
 export default function Configuracion() {
