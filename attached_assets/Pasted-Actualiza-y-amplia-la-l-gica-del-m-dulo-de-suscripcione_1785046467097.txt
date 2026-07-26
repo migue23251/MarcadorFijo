@@ -1,0 +1,51 @@
+Actualiza y amplia la lógica del módulo de suscripciones, permisos y planes en la aplicación (MarcadorFijo).
+
+### 1. 💳 Nuevos Planes de Suscripción y Tarifas:
+Modifica la base de datos y la interfaz de suscripción para soportar 4 planes con sus respectivos períodos de tiempo y precios:
+- **Mensual:** $39.900 COP / mes
+- **Trimestral:** $99.900 COP / trimestre (~16% de descuento)
+- **Semestral:** $179.900 COP / semestre (~25% de descuento)
+- **Anual:** $299.900 COP / año (~37% de descuento)
+
+Actualiza la tabla de usuarios/suscripciones en PostgreSQL para incluir:
+- `subscription_plan`: TEXT ('mensual', 'trimestral', 'semestral', 'anual', 'free')
+- `subscription_expires_at`: TIMESTAMP (Fecha exacta en la que vence la suscripción activa).
+- `is_subscription_active`: BOOLEAN (Calculado o actualizado según si la fecha actual es menor a `subscription_expires_at`).
+
+---
+
+### 2. 🎁 Módulo Freemium Configurable (Control de Administrador):
+Crea un sistema de acceso Freemium dinámico administrable desde el panel de control.
+
+**En la Base de Datos / Configuración Global:**
+- Añade una tabla o variable de configuración del sistema: `freemium_enabled` (BOOLEAN, por defecto `true`).
+- En la tabla de usuarios, añade un campo `daily_free_analyses_used`: INT (por defecto `0`) y `last_analysis_date`: DATE.
+
+**Panel de Administrador:**
+- Agrega un interruptor (Toggle Switch) en el panel del Administrador para **Habilitar / Inhabilitar el Modo Freemium** en toda la plataforma.
+
+---
+
+### 3. 🔒 Lógica de Permisos para "Analizar Partido":
+
+Cuando un usuario presiona el botón "Analizar Partido", el backend debe validar su nivel de acceso en este orden estricto:
+
+1. **Usuario con Suscripción Activa (`is_subscription_active == true`):**
+   - Acceso **ILIMITADO** al radar y a los análisis de partidos.
+
+2. **Usuario Freemium / Sin Suscripción Activa:**
+   - **Si `freemium_enabled == false` (Freemium desactivado por el Admin):**
+     - Bloquear la acción e ignorar la petición. Muestra un modal/alerta: *"El acceso gratuito está desactivado. Para realizar análisis, adquiere una suscripción."*
+   - **Si `freemium_enabled == true` (Freemium activado):**
+     - Si `last_analysis_date` es diferente a la fecha de hoy, reinicia `daily_free_analyses_used` a 0.
+     - **Si `daily_free_analyses_used < 1`:**
+       - Permite realizar el análisis del partido.
+       - Incrementa `daily_free_analyses_used` en 1 y actualiza `last_analysis_date` a la fecha actual.
+     - **Si `daily_free_analyses_used >= 1`:**
+       - Bloquea el análisis y muestra un modal de conversión indicando: *"Has agotado tu análisis gratuito de hoy. Suscríbete a uno de nuestros planes (Mensual, Trimestral, Semestral o Anual) para análisis ilimitados."*
+
+---
+
+### 🎨 UI / UX Requerida:
+- En la vista de Suscripciones o Perfil, muestra las 4 tarjetas de planes con sus respectivos precios, destacando el descuento de cada uno y la fecha de vencimiento si el usuario tiene un plan activo.
+- Muestra un contador/indicador visual para usuarios Freemium en el Dashboard: *"Análisis gratuitos de hoy: 1/1"* o *"0/1 restantes"*.
