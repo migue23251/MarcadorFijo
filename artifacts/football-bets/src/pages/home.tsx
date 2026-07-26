@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "wouter";
 import {
   Radar,
@@ -8,6 +9,9 @@ import {
   BrainCircuit,
   Wallet,
   AlertTriangle,
+  ChevronDown,
+  Check,
+  Zap,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 
@@ -60,7 +64,90 @@ const STEPS = [
   },
 ];
 
+/* ─── Pricing ───────────────────────────────────────────────────────────── */
+const PLANS = [
+  {
+    id: "mensual",
+    label: "Mensual",
+    price: "$39.900",
+    period: "/ mes",
+    perMonth: 39900,
+    savings: null,
+    popular: false,
+    features: ["Análisis IA ilimitados", "Gestión de bankroll", "Historial completo"],
+  },
+  {
+    id: "trimestral",
+    label: "Trimestral",
+    price: "$99.900",
+    period: "/ 3 meses",
+    perMonth: 33300,
+    savings: 17,
+    popular: true,
+    features: ["Análisis IA ilimitados", "Gestión de bankroll", "Historial completo", "Soporte prioritario"],
+  },
+  {
+    id: "semestral",
+    label: "Semestral",
+    price: "$179.900",
+    period: "/ 6 meses",
+    perMonth: 29983,
+    savings: 25,
+    popular: false,
+    features: ["Análisis IA ilimitados", "Gestión de bankroll", "Historial completo", "Soporte prioritario"],
+  },
+  {
+    id: "anual",
+    label: "Anual",
+    price: "$299.900",
+    period: "/ año",
+    perMonth: 24992,
+    savings: 37,
+    popular: false,
+    features: ["Análisis IA ilimitados", "Gestión de bankroll", "Historial completo", "Soporte prioritario", "Acceso anticipado a nuevas funciones"],
+  },
+];
+
+/* ─── FAQ ────────────────────────────────────────────────────────────────── */
+const FAQ_ITEMS = [
+  {
+    q: "¿Cómo funciona el análisis por IA?",
+    a: "Introduces el partido que quieres analizar y nuestro motor de IA procesa en segundos la forma reciente de cada equipo, historial de enfrentamientos directos, bajas y lesiones, y métricas avanzadas como xG y presión alta. El resultado es un informe cuantitativo con probabilidades calculadas, valor esperado por mercado y una recomendación concreta — sin narrativas, solo datos.",
+  },
+  {
+    q: "¿Tengo análisis gratuitos?",
+    a: "Sí. Todos los planes incluyen un período de prueba para que puedas evaluar la calidad del análisis antes de comprometerte. Una vez activa tu suscripción, los análisis son ilimitados durante todo el período contratado.",
+  },
+  {
+    q: "¿Qué medios de pago aceptan?",
+    a: "Aceptamos tarjetas de crédito y débito (Visa, Mastercard, American Express), PSE, Nequi y Daviplata. Todos los pagos se procesan de forma segura. Los planes trimestrales, semestrales y anuales se cobran en un único pago al momento de la suscripción.",
+  },
+];
+
 /* ─── Helpers ───────────────────────────────────────────────────────────── */
+function FaqItem({ question, answer }: { question: string; answer: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border border-border rounded-lg bg-card overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left hover:bg-muted/40 transition-colors"
+      >
+        <span className="text-sm font-semibold text-foreground">{question}</span>
+        <ChevronDown
+          className={`w-4 h-4 text-muted-foreground flex-shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {open && (
+        <div className="px-5 pb-4 text-sm text-muted-foreground leading-relaxed border-t border-border pt-3">
+          {answer}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FormBadge({ result }: { result: string }) {
   const colors: Record<string, string> = {
     W: "bg-primary/20 text-primary border border-primary/30",
@@ -353,29 +440,131 @@ export default function Home() {
             </div>
           </div>
         </section>
+
+        {/* ── Pricing ─────────────────────────────────────────────────────────── */}
+        <section className="py-24 px-4 bg-background border-b border-border">
+          <div className="max-w-5xl mx-auto space-y-12">
+            <div className="text-center space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-700">
+              <span className="inline-block px-3 py-1 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-semibold uppercase tracking-wider">
+                Planes
+              </span>
+              <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
+                Elige tu frecuencia
+              </h2>
+              <p className="text-muted-foreground max-w-lg mx-auto text-sm md:text-base">
+                Todos los planes incluyen acceso completo. A mayor plazo, mayor ahorro.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              {PLANS.map(({ id, label, price, period, perMonth, savings, popular, features }, i) => (
+                <div
+                  key={id}
+                  className={`relative flex flex-col rounded-xl border p-6 transition-all duration-300 animate-in fade-in slide-in-from-bottom-6 duration-700 ${
+                    popular
+                      ? "border-primary bg-primary/5 shadow-lg shadow-primary/10"
+                      : "border-border bg-card hover:border-primary/50"
+                  }`}
+                  style={{ animationDelay: `${i * 80}ms` }}
+                >
+                  {popular && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-wider shadow">
+                        <Zap className="w-3 h-3" />
+                        Más popular
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="mb-4">
+                    <p className="text-sm font-semibold text-muted-foreground mb-1">{label}</p>
+                    <div className="flex items-end gap-1">
+                      <span className="text-2xl font-black text-foreground">{price}</span>
+                      <span className="text-xs text-muted-foreground mb-1">{period}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      ≈ ${Math.round(perMonth / 100) * 100 === perMonth
+                        ? perMonth.toLocaleString("es-CO")
+                        : Math.round(perMonth).toLocaleString("es-CO")} COP / mes
+                    </p>
+                    {savings && (
+                      <span className="mt-2 inline-block px-2 py-0.5 rounded-full bg-primary/15 text-primary text-[11px] font-bold">
+                        Ahorra {savings}%
+                      </span>
+                    )}
+                  </div>
+
+                  <ul className="flex-1 space-y-2 mb-6">
+                    {features.map((f) => (
+                      <li key={f} className="flex items-start gap-2 text-xs text-muted-foreground">
+                        <Check className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <Link
+                    href="/sign-up"
+                    className={`w-full py-2.5 rounded-md text-sm font-semibold text-center transition-all ${
+                      popular
+                        ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                        : "border border-border bg-background hover:border-primary hover:text-primary"
+                    }`}
+                  >
+                    Empezar
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ── FAQ ─────────────────────────────────────────────────────────────── */}
+        <section className="py-24 px-4 bg-muted/30 border-b border-border">
+          <div className="max-w-2xl mx-auto space-y-10">
+            <div className="text-center space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-700">
+              <span className="inline-block px-3 py-1 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-semibold uppercase tracking-wider">
+                FAQ
+              </span>
+              <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
+                Preguntas frecuentes
+              </h2>
+            </div>
+
+            <div className="space-y-3 animate-in fade-in slide-in-from-bottom-6 duration-700 delay-100">
+              {FAQ_ITEMS.map(({ q, a }) => (
+                <FaqItem key={q} question={q} answer={a} />
+              ))}
+            </div>
+          </div>
+        </section>
       </main>
 
       {/* ── Footer ──────────────────────────────────────────────────────────── */}
       <footer className="border-t border-border bg-card">
-        {/* Responsible gambling banner */}
+        {/* Responsible gambling banner — Colombia */}
         <div className="border-b border-border bg-destructive/5 px-4 py-3">
           <div className="max-w-5xl mx-auto flex items-start sm:items-center gap-3">
             <AlertTriangle className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5 sm:mt-0" />
             <p className="text-xs text-muted-foreground leading-relaxed">
               <span className="font-semibold text-foreground">+18 · Juego responsable.</span>{" "}
-              MarcadorFijo es una herramienta de análisis deportivo. Las apuestas implican riesgo de pérdida económica.
-              Juega solo lo que puedas permitirte perder. Si el juego deja de ser entretenimiento, busca ayuda en{" "}
+              Las apuestas implican riesgo de pérdida. Consulta información sobre juego responsable en{" "}
               <a
-                href="https://www.jugarbien.es"
+                href="https://www.coljuegos.gov.co"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="underline underline-offset-2 hover:text-foreground transition-colors"
               >
-                jugarbien.es
+                Coljuegos
               </a>{" "}
-              o llama al{" "}
-              <a href="tel:900200225" className="underline underline-offset-2 hover:text-foreground transition-colors">
-                900 200 225
+              o{" "}
+              <a
+                href="https://www.jugadoresanonimos.org.co"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2 hover:text-foreground transition-colors"
+              >
+                Jugadores Anónimos Colombia
               </a>
               .
             </p>
