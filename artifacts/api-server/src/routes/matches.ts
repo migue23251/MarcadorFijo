@@ -3,10 +3,9 @@ import { RadarMatchesBody, AnalyzeMatchBody } from "@workspace/api-zod";
 import {
   requireAuth,
   requireSubscription,
-  type AuthenticatedRequest,
 } from "../lib/auth";
-import { getUserGeminiKey, getUserGeminiModel } from "./config";
-import { analyzeMatch, GeminiApiError } from "../lib/gemini";
+import { analyzeMatch } from "../lib/groq";
+import { getMatchOdds } from "../lib/odds";
 import { getMatchesFromApiFootball } from "../lib/api-football";
 import { db, analysisCacheTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
@@ -46,7 +45,7 @@ router.get(
       .limit(1);
 
     if (cached.length === 0) {
-      res.status(404).json({ error: "No hay análisis cacheado para este partido hoy. Usa el Radar para analizarlo." });
+      res.status(404).json({ error: "No hay análisis cacheado para este partido hoy." });
       return;
     }
 
@@ -54,7 +53,7 @@ router.get(
   },
 );
 
-// POST /matches/radar — fetches today's fixtures from API-Football (no Gemini key needed)
+// POST /matches/radar — fetches today's fixtures from API-Football
 router.post(
   "/matches/radar",
   requireAuth,
@@ -67,8 +66,7 @@ router.post(
     }
 
     try {
-      const leagues = parsed.data.leagues;
-      const results = await getMatchesFromApiFootball(leagues);
+      const results = await getMatchesFromApiFootball(parsed.data.leagues);
       res.json(results);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Error al obtener partidos";
@@ -77,43 +75,29 @@ router.post(
   },
 );
 
-// POST /matches/analyze — Gemini prediction (still requires user Gemini key)
+// POST /matches/analyze — AI prediction via Groq + real odds from The Odds API
 router.post(
   "/matches/analyze",
   requireAuth,
   requireSubscription,
   async (req, res): Promise<void> => {
-    const user = (req as AuthenticatedRequest).dbUser;
-
     const parsed = AnalyzeMatchBody.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.message });
       return;
     }
 
-    const apiKey = await getUserGeminiKey(user.clerkId);
-    if (!apiKey) {
-      res
-        .status(400)
-        .json({ error: "No tienes una API Key de Gemini configurada. Configúrala en Ajustes." });
-      return;
-    }
-
     try {
-      const model = await getUserGeminiModel(user.clerkId);
       const { homeTeam, awayTeam, league, kickoffTime } = parsed.data;
-      const analysis = await analyzeMatch(apiKey, model, homeTeam, awayTeam, league, kickoffTime);
+
+      // Fetch real odds to enrich the AI prompt (non-fatal if unavailable)
+      const oddsData = await getMatchOdds(homeTeam, awayTeam, league).catch(() => null);
+
+      const analysis = await analyzeMatch(homeTeam, awayTeam, league, kickoffTime, oddsData);
       res.json(analysis);
     } catch (err) {
-      if (err instanceof GeminiApiError) {
-        const httpStatus = [400, 403, 404, 429].includes(err.status) ? err.status : 502;
-        res.status(httpStatus).json({
-          error: err.message,
-          ...(err.retryAfter !== undefined && { retryAfter: err.retryAfter }),
-        });
-        return;
-      }
-      throw err;
+      const message = err instanceof Error ? err.message : "Error al analizar el partido";
+      res.status(502).json({ error: message });
     }
   },
 );

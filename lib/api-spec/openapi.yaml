@@ -12,8 +12,6 @@ tags:
     description: Health operations
   - name: users
     description: User management
-  - name: config
-    description: User configuration (API keys)
   - name: matches
     description: Match radar and analysis
   - name: bets
@@ -118,102 +116,6 @@ paths:
         "404":
           description: User not found
 
-  /config/gemini-model:
-    get:
-      operationId: getGeminiModel
-      tags: [config]
-      summary: Get user's selected Gemini model
-      responses:
-        "200":
-          description: Current model config
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GeminiModelConfig"
-        "401":
-          description: Unauthorized
-    put:
-      operationId: saveGeminiModel
-      tags: [config]
-      summary: Save user's preferred Gemini model
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/GeminiModelInput"
-      responses:
-        "200":
-          description: Model saved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GeminiModelConfig"
-        "401":
-          description: Unauthorized
-
-  /config/gemini-models:
-    get:
-      operationId: getGeminiModels
-      tags: [config]
-      summary: List available Gemini models for the user's API key
-      responses:
-        "200":
-          description: Available models
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GeminiModelsResponse"
-        "400":
-          description: No Gemini key configured
-        "401":
-          description: Unauthorized
-        "502":
-          description: Gemini API error
-
-  /config/gemini-key:
-    get:
-      operationId: getGeminiKeyStatus
-      tags: [config]
-      summary: Check if user has a Gemini API key configured
-      responses:
-        "200":
-          description: Key status
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GeminiKeyStatus"
-        "401":
-          description: Unauthorized
-    put:
-      operationId: saveGeminiKey
-      tags: [config]
-      summary: Save or update user's Gemini API key
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/GeminiKeyInput"
-      responses:
-        "200":
-          description: Key saved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GeminiKeyStatus"
-        "401":
-          description: Unauthorized
-    delete:
-      operationId: deleteGeminiKey
-      tags: [config]
-      summary: Delete user's Gemini API key
-      responses:
-        "204":
-          description: Key deleted
-        "401":
-          description: Unauthorized
-
   /matches/radar:
     post:
       operationId: radarMatches
@@ -245,7 +147,7 @@ paths:
     get:
       operationId: getCachedAnalysis
       tags: [matches]
-      summary: Get cached analysis for a match (no Gemini call)
+      summary: Get cached analysis for a match (no AI call)
       description: Returns the cached analysis stored in the DB from any prior request today. 404 if no one has analyzed this match yet today.
       parameters:
         - name: homeTeam
@@ -281,7 +183,7 @@ paths:
     post:
       operationId: analyzeMatch
       tags: [matches]
-      summary: Analyze a match and get predictions via Gemini AI
+      summary: Analyze a match and get predictions via Groq AI (with real odds from The Odds API)
       requestBody:
         required: true
         content:
@@ -295,8 +197,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MatchAnalysis"
-        "400":
-          description: No Gemini key configured
         "401":
           description: Unauthorized
         "403":
@@ -476,61 +376,6 @@ components:
           type: boolean
         subscriptionExpiresAt:
           type: ["string", "null"]
-
-    GeminiModel:
-      type: object
-      required:
-        - id
-        - displayName
-      properties:
-        id:
-          type: string
-        displayName:
-          type: string
-        description:
-          type: ["string", "null"]
-
-    GeminiModelsResponse:
-      type: object
-      required:
-        - models
-      properties:
-        models:
-          type: array
-          items:
-            $ref: "#/components/schemas/GeminiModel"
-
-    GeminiKeyStatus:
-      type: object
-      required:
-        - hasKey
-      properties:
-        hasKey:
-          type: boolean
-
-    GeminiKeyInput:
-      type: object
-      required:
-        - apiKey
-      properties:
-        apiKey:
-          type: string
-
-    GeminiModelConfig:
-      type: object
-      required:
-        - model
-      properties:
-        model:
-          type: string
-
-    GeminiModelInput:
-      type: object
-      required:
-        - model
-      properties:
-        model:
-          type: string
 
     RadarInput:
       type: object

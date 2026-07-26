@@ -14,7 +14,8 @@ A full-stack football betting management and prediction app powered by Gemini AI
 - Required env: `DATABASE_URL` — Postgres connection string
 - Required env: `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`, `VITE_CLERK_PUBLISHABLE_KEY` — auto-provisioned via Clerk
 - Required env: `FOOTBALL_API_KEY` — API-Football key from RapidAPI (100 req/day free tier)
-- Optional env: `ENCRYPTION_KEY` — AES-256-GCM key for Gemini API key encryption (falls back to SESSION_SECRET)
+- Required env: `GROQ_API_KEY` — Groq API key for AI analysis (console.groq.com, free tier, generous limits)
+- Required env: `THE_ODDS_API_KEY` — The Odds API key for real bookmaker odds (the-odds-api.com, 500 req/month free)
 
 ## Stack
 
@@ -25,7 +26,8 @@ A full-stack football betting management and prediction app powered by Gemini AI
 - DB: PostgreSQL + Drizzle ORM
 - Validation: Zod (`zod/v4`), `drizzle-zod`
 - API codegen: Orval (from OpenAPI spec)
-- AI: Gemini REST API (user-supplied API keys, stored encrypted)
+- AI: Groq (Llama 3.3 70B) via `groq-sdk` — server-side key, no per-user config needed
+- Odds: The Odds API — real bookmaker odds injected into AI prompt for EV-based predictions
 
 ## Where things live
 

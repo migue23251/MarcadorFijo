@@ -39,33 +39,6 @@ export interface SubscriptionUpdate {
   subscriptionExpiresAt?: string | null;
 }
 
-export interface GeminiModel {
-  id: string;
-  displayName: string;
-  /** @nullable */
-  description?: string | null;
-}
-
-export interface GeminiModelsResponse {
-  models: GeminiModel[];
-}
-
-export interface GeminiKeyStatus {
-  hasKey: boolean;
-}
-
-export interface GeminiKeyInput {
-  apiKey: string;
-}
-
-export interface GeminiModelConfig {
-  model: string;
-}
-
-export interface GeminiModelInput {
-  model: string;
-}
-
 export interface RadarInput {
   leagues?: string[];
 }

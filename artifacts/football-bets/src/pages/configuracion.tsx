@@ -1,30 +1,13 @@
-import { useState, useEffect, useRef } from "react";
-import { 
-  useGetMe, 
-  getGetMeQueryKey, 
+import { useState, useRef, useEffect } from "react";
+import {
+  useGetMe,
+  getGetMeQueryKey,
   useUpdateMe,
-  useGetGeminiKeyStatus, 
-  getGetGeminiKeyStatusQueryKey,
-  useSaveGeminiKey,
-  useDeleteGeminiKey,
-  useGetGeminiModel,
-  getGetGeminiModelQueryKey,
-  useSaveGeminiModel,
-  useGetGeminiModels,
-  getGetGeminiModelsQueryKey,
 } from "@workspace/api-client-react";
 import { useUser } from "@clerk/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { Key, User, ShieldCheck, Check, Loader2, Trash2, Cpu } from "lucide-react";
-
-const FALLBACK_MODELS = [
-  { id: "gemini-2.0-flash",     displayName: "Gemini 2.0 Flash",     description: "Rápido y eficiente. Recomendado para uso diario." },
-  { id: "gemini-2.5-flash",     displayName: "Gemini 2.5 Flash",     description: "Mayor capacidad de razonamiento con buena velocidad." },
-  { id: "gemini-2.5-pro",       displayName: "Gemini 2.5 Pro",       description: "Máxima inteligencia para análisis complejos. Más lento." },
-  { id: "gemini-1.5-pro-001",   displayName: "Gemini 1.5 Pro",       description: "Modelo Pro de generación anterior. Alta calidad." },
-  { id: "gemini-1.5-flash-001", displayName: "Gemini 1.5 Flash",     description: "Flash de generación anterior. Muy económico." },
-];
+import { User, ShieldCheck, Loader2, Cpu } from "lucide-react";
 
 export default function Configuracion() {
   const { user } = useUser();
@@ -32,114 +15,98 @@ export default function Configuracion() {
   const queryClient = useQueryClient();
 
   const { data: me } = useGetMe({ query: { queryKey: getGetMeQueryKey() } });
-  const { data: keyStatus } = useGetGeminiKeyStatus({ query: { queryKey: getGetGeminiKeyStatusQueryKey() } });
-  const { data: modelConfig } = useGetGeminiModel({ query: { queryKey: getGetGeminiModelQueryKey() } });
-  const { data: modelsData } = useGetGeminiModels({
-    query: {
-      queryKey: getGetGeminiModelsQueryKey(),
-      enabled: !!keyStatus?.hasKey,
-      retry: false,
-    },
-  });
 
   return (
     <div className="space-y-8 max-w-4xl mx-auto animate-in fade-in duration-500">
       <header>
         <h1 className="text-3xl font-bold tracking-tight">Configuración</h1>
-        <p className="text-muted-foreground">Gestiona tus credenciales y perfil operativo.</p>
+        <p className="text-muted-foreground">Gestiona tu perfil operativo.</p>
       </header>
 
       <div className="grid grid-cols-1 gap-8">
-        
-        {/* Gemini API Key Section */}
-        <section className="bg-card border border-border rounded-xl overflow-hidden">
-          <div className="p-6 border-b border-border bg-secondary/20 flex items-center gap-3">
-            <div className="p-2 bg-primary/10 rounded-md">
-              <Key className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold">API Key de Gemini</h2>
-              <p className="text-sm text-muted-foreground">Requerida para el motor de análisis del Radar.</p>
-            </div>
-          </div>
-          <div className="p-6">
-            <GeminiKeyForm hasKey={keyStatus?.hasKey} queryClient={queryClient} />
-          </div>
-        </section>
 
-        {/* Gemini Model Section */}
+        {/* AI Engine Info */}
         <section className="bg-card border border-border rounded-xl overflow-hidden">
           <div className="p-6 border-b border-border bg-secondary/20 flex items-center gap-3">
             <div className="p-2 bg-primary/10 rounded-md">
               <Cpu className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold">Modelo de IA</h2>
-              <p className="text-sm text-muted-foreground">Selecciona el modelo de Gemini para el Radar y los análisis.</p>
+              <h2 className="text-lg font-semibold">Motor de Análisis</h2>
+              <p className="text-sm text-muted-foreground">IA y fuente de datos de cuotas configuradas en el servidor.</p>
             </div>
           </div>
-          <div className="p-6">
-            <GeminiModelSelector
-              currentModel={modelConfig?.model}
-              availableModels={modelsData?.models}
-              hasKey={keyStatus?.hasKey}
-              queryClient={queryClient}
-              toast={toast}
-            />
+          <div className="p-6 space-y-3">
+            <div className="flex items-center justify-between py-3 border-b border-border">
+              <div>
+                <p className="text-sm font-medium">Motor IA</p>
+                <p className="text-xs text-muted-foreground">Modelo de lenguaje para análisis y predicciones</p>
+              </div>
+              <span className="px-3 py-1 bg-primary/10 text-primary text-xs font-semibold rounded-full border border-primary/20">
+                Groq · Llama 3.3 70B
+              </span>
+            </div>
+            <div className="flex items-center justify-between py-3 border-b border-border">
+              <div>
+                <p className="text-sm font-medium">Fuente de cuotas</p>
+                <p className="text-xs text-muted-foreground">Cuotas en tiempo real de bookmakers europeos</p>
+              </div>
+              <span className="px-3 py-1 bg-primary/10 text-primary text-xs font-semibold rounded-full border border-primary/20">
+                The Odds API
+              </span>
+            </div>
+            <div className="flex items-center justify-between py-3">
+              <div>
+                <p className="text-sm font-medium">Datos de partidos</p>
+                <p className="text-xs text-muted-foreground">Fixtures, marcadores en vivo y estadísticas</p>
+              </div>
+              <span className="px-3 py-1 bg-primary/10 text-primary text-xs font-semibold rounded-full border border-primary/20">
+                API-Football
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground pt-2">
+              Los análisis se cachean durante 24 h para optimizar el uso de tokens. Un mismo partido no se analiza dos veces en el mismo día.
+            </p>
           </div>
         </section>
 
         {/* Subscription Status */}
         <section className="bg-card border border-border rounded-xl overflow-hidden">
           <div className="p-6 border-b border-border bg-secondary/20 flex items-center gap-3">
-            <div className="p-2 bg-blue-500/10 rounded-md">
-              <ShieldCheck className="w-5 h-5 text-blue-500" />
+            <div className="p-2 bg-primary/10 rounded-md">
+              <ShieldCheck className="w-5 h-5 text-primary" />
             </div>
             <div>
               <h2 className="text-lg font-semibold">Estado de Suscripción</h2>
-              <p className="text-sm text-muted-foreground">Acceso a la plataforma.</p>
-            </div>
-          </div>
-          <div className="p-6 flex flex-col gap-4">
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Estado actual:</span>
-              {me?.activeSubscription ? (
-                <span className="px-3 py-1 bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 rounded-full text-sm font-bold flex items-center gap-2">
-                  <Check className="w-4 h-4" /> Activa
-                </span>
-              ) : (
-                <span className="px-3 py-1 bg-red-500/20 text-red-500 border border-red-500/30 rounded-full text-sm font-bold">
-                  Inactiva
-                </span>
-              )}
-            </div>
-            {me?.subscriptionExpiresAt && (
-              <div className="text-sm">
-                <span className="font-medium">Expira el: </span> 
-                {new Date(me.subscriptionExpiresAt).toLocaleDateString()}
-              </div>
-            )}
-            {!me?.activeSubscription && (
-              <p className="text-sm text-muted-foreground bg-secondary p-3 rounded-md border border-border">
-                Para activar tu suscripción, contacta al administrador del sistema.
-              </p>
-            )}
-          </div>
-        </section>
-
-        {/* Profile Section */}
-        <section className="bg-card border border-border rounded-xl overflow-hidden">
-          <div className="p-6 border-b border-border bg-secondary/20 flex items-center gap-3">
-            <div className="p-2 bg-purple-500/10 rounded-md">
-              <User className="w-5 h-5 text-purple-500" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold">Mi Perfil</h2>
-              <p className="text-sm text-muted-foreground">Datos de operador.</p>
+              <p className="text-sm text-muted-foreground">Acceso al Radar y al motor de análisis.</p>
             </div>
           </div>
           <div className="p-6">
-            <ProfileForm email={user?.primaryEmailAddress?.emailAddress} currentName={me?.name} />
+            <SubscriptionStatus
+              active={me?.activeSubscription}
+              expiresAt={me?.subscriptionExpiresAt ?? null}
+            />
+          </div>
+        </section>
+
+        {/* Profile */}
+        <section className="bg-card border border-border rounded-xl overflow-hidden">
+          <div className="p-6 border-b border-border bg-secondary/20 flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-md">
+              <User className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold">Perfil</h2>
+              <p className="text-sm text-muted-foreground">Tu identidad de operador.</p>
+            </div>
+          </div>
+          <div className="p-6">
+            <ProfileForm
+              currentName={me?.name ?? user?.fullName ?? ""}
+              email={me?.email ?? user?.primaryEmailAddress?.emailAddress ?? ""}
+              queryClient={queryClient}
+              toast={toast}
+            />
           </div>
         </section>
 
@@ -148,173 +115,65 @@ export default function Configuracion() {
   );
 }
 
-type ModelItem = { id: string; displayName: string; description: string | null };
+// ---------------------------------------------------------------------------
+// Subscription status
+// ---------------------------------------------------------------------------
 
-function GeminiModelSelector({
-  currentModel,
-  availableModels,
-  hasKey,
+function SubscriptionStatus({
+  active,
+  expiresAt,
+}: {
+  active?: boolean;
+  expiresAt: string | null;
+}) {
+  if (active === undefined) {
+    return <div className="h-8 w-40 bg-secondary/50 rounded animate-pulse" />;
+  }
+
+  return (
+    <div className="flex items-center gap-4">
+      <span
+        className={`px-4 py-1.5 rounded-full text-sm font-semibold border ${
+          active
+            ? "bg-primary/10 text-primary border-primary/30"
+            : "bg-destructive/10 text-destructive border-destructive/30"
+        }`}
+      >
+        {active ? "✓ Activa" : "✗ Sin suscripción"}
+      </span>
+      {active && expiresAt && (
+        <span className="text-xs text-muted-foreground">
+          Válida hasta {new Date(expiresAt).toLocaleDateString("es-ES")}
+        </span>
+      )}
+      {!active && (
+        <span className="text-xs text-muted-foreground">
+          Contacta con el administrador para activar tu acceso.
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Profile form
+// ---------------------------------------------------------------------------
+
+function ProfileForm({
+  currentName,
+  email,
   queryClient,
   toast,
 }: {
-  currentModel?: string;
-  availableModels?: ModelItem[];
-  hasKey?: boolean;
-  queryClient: ReturnType<typeof import("@tanstack/react-query").useQueryClient>;
+  currentName: string;
+  email: string;
+  queryClient: ReturnType<typeof useQueryClient>;
   toast: ReturnType<typeof useToast>["toast"];
 }) {
-  const saveModel = useSaveGeminiModel();
-  const [selected, setSelected] = useState(currentModel ?? "gemini-2.0-flash");
-
-  useEffect(() => {
-    if (currentModel) setSelected(currentModel);
-  }, [currentModel]);
-
-  // Use live models if available, fall back to hardcoded list
-  const models: ModelItem[] = availableModels && availableModels.length > 0
-    ? availableModels
-    : FALLBACK_MODELS;
-
-  const handleSave = () => {
-    saveModel.mutate({ data: { model: selected } }, {
-      onSuccess: () => {
-        toast({ title: "Modelo actualizado", description: `Ahora usas ${selected}.` });
-        queryClient.invalidateQueries({ queryKey: getGetGeminiModelQueryKey() });
-      },
-      onError: () => toast({ title: "Error", description: "No se pudo guardar el modelo.", variant: "destructive" }),
-    });
-  };
-
-  return (
-    <div className="space-y-4">
-      {!hasKey && (
-        <p className="text-sm text-muted-foreground bg-secondary/50 border border-border rounded-md px-4 py-3">
-          Guarda una API Key de Gemini para ver los modelos disponibles con tu cuenta.
-        </p>
-      )}
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {models.map(m => (
-          <button
-            key={m.id}
-            onClick={() => setSelected(m.id)}
-            className={`text-left p-4 rounded-lg border transition-all duration-150 ${
-              selected === m.id
-                ? "border-primary/60 bg-primary/10"
-                : "border-border bg-secondary/30 hover:border-primary/30"
-            }`}
-          >
-            <div className="flex items-center justify-between mb-1">
-              <span className={`text-sm font-semibold ${selected === m.id ? "text-primary" : "text-foreground"}`}>
-                {m.displayName}
-              </span>
-              {selected === m.id && <Check className="w-4 h-4 text-primary shrink-0" />}
-            </div>
-            {m.description && (
-              <p className="text-xs text-muted-foreground line-clamp-2">{m.description}</p>
-            )}
-          </button>
-        ))}
-      </div>
-
-      <button
-        onClick={handleSave}
-        disabled={saveModel.isPending || selected === currentModel}
-        className="px-6 py-2 bg-primary text-primary-foreground font-semibold rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2"
-      >
-        {saveModel.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-        Guardar modelo
-      </button>
-    </div>
-  );
-}
-
-function GeminiKeyForm({
-  hasKey,
-  queryClient,
-}: {
-  hasKey?: boolean;
-  queryClient: ReturnType<typeof import("@tanstack/react-query").useQueryClient>;
-}) {
-  const [apiKey, setApiKey] = useState("");
-  const { toast } = useToast();
-  const saveKey = useSaveGeminiKey();
-  const deleteKey = useDeleteGeminiKey();
-
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!apiKey.trim()) return;
-
-    saveKey.mutate({ data: { apiKey } }, {
-      onSuccess: () => {
-        toast({ title: "API Key guardada", description: "Consultando modelos disponibles…" });
-        setApiKey("");
-        // Refresh both key status and the models list
-        queryClient.invalidateQueries({ queryKey: getGetGeminiKeyStatusQueryKey() });
-        queryClient.invalidateQueries({ queryKey: getGetGeminiModelsQueryKey() });
-      },
-      onError: () => toast({ title: "Error", description: "No se pudo guardar la clave.", variant: "destructive" })
-    });
-  };
-
-  const handleDelete = () => {
-    deleteKey.mutate(undefined, {
-      onSuccess: () => {
-        toast({ title: "API Key eliminada" });
-        queryClient.invalidateQueries({ queryKey: getGetGeminiKeyStatusQueryKey() });
-        queryClient.invalidateQueries({ queryKey: getGetGeminiModelsQueryKey() });
-      }
-    });
-  };
-
-  return (
-    <div className="space-y-4">
-      {hasKey && (
-        <div className="flex items-center justify-between p-3 bg-primary/5 border border-primary/20 rounded-md mb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-            <span className="font-mono text-sm tracking-widest text-primary">••••••••••••••••</span>
-          </div>
-          <button 
-            onClick={handleDelete}
-            disabled={deleteKey.isPending}
-            className="p-2 text-destructive hover:bg-destructive/10 rounded transition-colors"
-            title="Eliminar Key"
-          >
-            {deleteKey.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-          </button>
-        </div>
-      )}
-
-      <form onSubmit={handleSave} className="flex flex-col sm:flex-row gap-3">
-        <input 
-          type="password"
-          value={apiKey}
-          onChange={e => setApiKey(e.target.value)}
-          placeholder={hasKey ? "Actualizar API Key..." : "Ingresa tu Gemini API Key..."}
-          className="flex-1 bg-background border border-border px-4 py-2 rounded-md text-sm font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
-        />
-        <button 
-          type="submit" 
-          disabled={!apiKey.trim() || saveKey.isPending}
-          className="sm:shrink-0 px-6 py-2 bg-secondary text-secondary-foreground font-semibold rounded-md hover:bg-secondary/80 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-        >
-          {saveKey.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-          Guardar
-        </button>
-      </form>
-      <p className="text-xs text-muted-foreground">La clave se almacena de forma segura y solo se usa para el análisis de partidos.</p>
-    </div>
-  );
-}
-
-function ProfileForm({ email, currentName }: { email?: string, currentName?: string | null }) {
-  const [name, setName] = useState("");
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const [name, setName] = useState(currentName);
   const updateMe = useUpdateMe();
-
   const initRef = useRef(false);
+
   useEffect(() => {
     if (currentName && !initRef.current) {
       setName(currentName);
@@ -324,36 +183,43 @@ function ProfileForm({ email, currentName }: { email?: string, currentName?: str
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    updateMe.mutate({ data: { name } }, {
-      onSuccess: () => {
-        toast({ title: "Perfil actualizado" });
-        queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
-      }
-    });
+    updateMe.mutate(
+      { data: { name } },
+      {
+        onSuccess: () => {
+          toast({ title: "Perfil actualizado" });
+          queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+        },
+      },
+    );
   };
 
   return (
     <form onSubmit={handleSave} className="space-y-4 max-w-md">
       <div className="space-y-1">
-        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Email (Cuenta Clerk)</label>
+        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          Email (Cuenta Clerk)
+        </label>
         <div className="px-4 py-2 bg-secondary/50 border border-border rounded-md text-sm text-muted-foreground">
           {email || "Cargando..."}
         </div>
       </div>
-      
+
       <div className="space-y-1">
-        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Nombre de Operador</label>
-        <input 
+        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          Nombre de Operador
+        </label>
+        <input
           type="text"
           value={name}
-          onChange={e => setName(e.target.value)}
+          onChange={(e) => setName(e.target.value)}
           placeholder="Ej: John Doe"
           className="w-full bg-background border border-border px-4 py-2 rounded-md text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
         />
       </div>
 
-      <button 
-        type="submit" 
+      <button
+        type="submit"
         disabled={updateMe.isPending || name === currentName}
         className="px-6 py-2 bg-primary text-primary-foreground font-semibold rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2"
       >

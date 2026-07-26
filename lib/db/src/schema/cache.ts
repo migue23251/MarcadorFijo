@@ -38,3 +38,20 @@ export const analysisCacheTable = pgTable("analysis_cache", {
 });
 
 export type AnalysisCache = typeof analysisCacheTable.$inferSelect;
+
+/**
+ * Daily odds cache — one entry per sport key per day.
+ * Populated by The Odds API and shared across all users to preserve the 500 req/month quota.
+ */
+export const oddsCacheTable = pgTable("odds_cache", {
+  id: serial("id").primaryKey(),
+  /** YYYY-MM-DD in UTC */
+  date: text("date").notNull(),
+  /** The Odds API sport key (e.g. "soccer_epl") */
+  sportKey: text("sport_key").notNull(),
+  /** Full JSON array of OddsEvent objects for this sport today */
+  result: text("result").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type OddsCache = typeof oddsCacheTable.$inferSelect;

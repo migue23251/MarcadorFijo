@@ -88,64 +88,6 @@ export const UpdateUserSubscriptionResponse = zod.object({
 
 
 /**
- * @summary Get user's selected Gemini model
- */
-export const GetGeminiModelResponse = zod.object({
-  "model": zod.string()
-})
-
-
-/**
- * @summary Save user's preferred Gemini model
- */
-export const SaveGeminiModelBody = zod.object({
-  "model": zod.string()
-})
-
-export const SaveGeminiModelResponse = zod.object({
-  "model": zod.string()
-})
-
-
-/**
- * @summary List available Gemini models for the user's API key
- */
-export const GetGeminiModelsResponse = zod.object({
-  "models": zod.array(zod.object({
-  "id": zod.string(),
-  "displayName": zod.string(),
-  "description": zod.string().nullish()
-}))
-})
-
-
-/**
- * @summary Check if user has a Gemini API key configured
- */
-export const GetGeminiKeyStatusResponse = zod.object({
-  "hasKey": zod.boolean()
-})
-
-
-/**
- * @summary Save or update user's Gemini API key
- */
-export const SaveGeminiKeyBody = zod.object({
-  "apiKey": zod.string()
-})
-
-export const SaveGeminiKeyResponse = zod.object({
-  "hasKey": zod.boolean()
-})
-
-
-/**
- * @summary Delete user's Gemini API key
- */
-export const DeleteGeminiKeyResponse = zod.void()
-
-
-/**
  * @summary Fetch today's matches via API-Football
  */
 export const RadarMatchesBody = zod.object({
@@ -175,7 +117,7 @@ export const RadarMatchesResponse = zod.array(RadarMatchesResponseItem)
 
 /**
  * Returns the cached analysis stored in the DB from any prior request today. 404 if no one has analyzed this match yet today.
- * @summary Get cached analysis for a match (no Gemini call)
+ * @summary Get cached analysis for a match (no AI call)
  */
 export const GetCachedAnalysisQueryParams = zod.object({
   "homeTeam": zod.coerce.string(),
@@ -200,7 +142,7 @@ export const GetCachedAnalysisResponse = zod.object({
 
 
 /**
- * @summary Analyze a match and get predictions via Gemini AI
+ * @summary Analyze a match and get predictions via Groq AI (with real odds from The Odds API)
  */
 export const AnalyzeMatchBody = zod.object({
   "homeTeam": zod.string(),
