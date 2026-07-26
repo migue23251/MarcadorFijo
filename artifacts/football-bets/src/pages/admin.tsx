@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { 
   useGetMe, 
   getGetMeQueryKey, 
@@ -13,7 +13,7 @@ import {
 import { Redirect } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { Shield, Users, Loader2, RefreshCw, CheckCircle2, XCircle, AlertTriangle, HelpCircle, Cpu, ChevronLeft, ChevronRight, Search, UserRound, UserRoundCog } from "lucide-react";
+import { Shield, Users, Loader2, RefreshCw, CheckCircle2, XCircle, AlertTriangle, HelpCircle, Cpu, ChevronLeft, ChevronRight, Search, UserRound, UserRoundCog, Gift, ChevronDown, CalendarClock } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -397,49 +397,159 @@ function FreemiumSettingsPanel() {
 }
 
 // ---------------------------------------------------------------------------
-// Desktop: table row
+// Plans config
+// ---------------------------------------------------------------------------
+
+const GIFT_PLANS = [
+  { value: "mensual",    label: "Mensual",     duration: "1 mes" },
+  { value: "trimestral", label: "Trimestral",  duration: "3 meses" },
+  { value: "semestral",  label: "Semestral",   duration: "6 meses" },
+  { value: "anual",      label: "Anual",       duration: "12 meses" },
+] as const;
+
+// ---------------------------------------------------------------------------
+// User row
 // ---------------------------------------------------------------------------
 
 function UserRow({ user }: { user: UserProfile }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const updateSubscription = useUpdateUserSubscription();
+  const [giftOpen, setGiftOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const handleToggle = () => {
-    updateSubscription.mutate({
-      userId: user.clerkId,
-      data: { activeSubscription: !user.activeSubscription }
-    }, {
-      onSuccess: () => {
-        toast({ title: "Suscripción actualizada", description: `Acceso ${!user.activeSubscription ? 'concedido' : 'revocado'} para ${user.email}` });
-        queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
-      },
-      onError: () => {
-        toast({ title: "Error", description: "No se pudo actualizar el estado.", variant: "destructive" });
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!giftOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node))
+        setGiftOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [giftOpen]);
+
+  const handleGift = (plan: string) => {
+    setGiftOpen(false);
+    updateSubscription.mutate(
+      { userId: user.clerkId, data: { activeSubscription: true, subscriptionPlan: plan as any } },
+      {
+        onSuccess: () => {
+          const p = GIFT_PLANS.find((x) => x.value === plan);
+          toast({
+            title: "Suscripción regalada 🎁",
+            description: `Plan ${p?.label ?? plan} activado para ${user.email}.`,
+          });
+          queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
+        },
+        onError: () => {
+          toast({ title: "Error", description: "No se pudo regalar la suscripción.", variant: "destructive" });
+        },
       }
-    });
+    );
+  };
+
+  const handleRevoke = () => {
+    updateSubscription.mutate(
+      { userId: user.clerkId, data: { activeSubscription: false } },
+      {
+        onSuccess: () => {
+          toast({ title: "Acceso revocado", description: `Suscripción cancelada para ${user.email}.` });
+          queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
+        },
+        onError: () => {
+          toast({ title: "Error", description: "No se pudo revocar el acceso.", variant: "destructive" });
+        },
+      }
+    );
   };
 
   const isPending = updateSubscription.isPending;
 
+  const expiryLabel = user.subscriptionExpiresAt
+    ? new Date(user.subscriptionExpiresAt).toLocaleDateString("es-CO", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : null;
+
   return (
     <div className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-secondary/20">
+      {/* Avatar */}
       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
         {(user.name || user.email).slice(0, 1).toUpperCase()}
       </div>
+
+      {/* Name + email + expiry */}
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="truncate text-sm font-bold text-foreground">{user.name || "Sin nombre"}</span>
           <UserRoleBadge role={user.role} />
         </div>
         <span className="block truncate text-xs text-muted-foreground">{user.email}</span>
+        {user.isSubscriptionActive && expiryLabel && (
+          <span className="flex items-center gap-1 text-[11px] text-emerald-500 mt-0.5">
+            <CalendarClock className="w-3 h-3" />
+            Vence {expiryLabel}
+          </span>
+        )}
       </div>
+
+      {/* Badge + plan (hidden on xs) */}
       <div className="hidden shrink-0 items-center gap-2 sm:flex">
         <SubscriptionBadge active={user.isSubscriptionActive} />
-        <span className="text-xs text-muted-foreground">{user.subscriptionPlan}</span>
+        <span className="text-xs text-muted-foreground capitalize">{user.subscriptionPlan}</span>
       </div>
-      <div className="shrink-0">
-        <SubscriptionToggle active={user.activeSubscription} isPending={isPending} onToggle={handleToggle} />
+
+      {/* Actions */}
+      <div className="flex shrink-0 items-center gap-2">
+        {/* Gift dropdown */}
+        <div className="relative" ref={dropdownRef}>
+          <button
+            onClick={() => setGiftOpen((v) => !v)}
+            disabled={isPending}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-secondary disabled:opacity-50"
+          >
+            {isPending ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Gift className="w-3.5 h-3.5 text-primary" />
+            )}
+            <span className="hidden sm:inline">Regalar</span>
+            <ChevronDown className={`w-3 h-3 text-muted-foreground transition-transform ${giftOpen ? "rotate-180" : ""}`} />
+          </button>
+
+          {giftOpen && (
+            <div className="absolute right-0 top-full mt-1.5 z-50 w-52 rounded-lg border border-border bg-card shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
+              <p className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground border-b border-border">
+                Duración del regalo
+              </p>
+              {GIFT_PLANS.map((plan) => (
+                <button
+                  key={plan.value}
+                  onClick={() => handleGift(plan.value)}
+                  className="w-full flex items-center justify-between px-3 py-2.5 text-sm transition-colors hover:bg-secondary"
+                >
+                  <span className="font-medium text-foreground">{plan.label}</span>
+                  <span className="text-xs text-muted-foreground">{plan.duration}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Revoke toggle — only shown when subscription is active */}
+        {user.isSubscriptionActive && (
+          <button
+            onClick={handleRevoke}
+            disabled={isPending}
+            title="Revocar acceso"
+            className="relative inline-flex h-6 w-11 items-center rounded-full bg-emerald-500 transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background disabled:opacity-50 hover:bg-red-500"
+          >
+            <span className="inline-block h-4 w-4 translate-x-6 transform rounded-full bg-white transition-transform" />
+          </button>
+        )}
       </div>
     </div>
   );
@@ -468,31 +578,5 @@ function SubscriptionBadge({ active }: { active: boolean }) {
     >
       {active ? "Activa" : "Inactiva"}
     </Badge>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Shared toggle button
-// ---------------------------------------------------------------------------
-
-function SubscriptionToggle({ active, isPending, onToggle }: {
-  active: boolean;
-  isPending: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <button 
-      onClick={onToggle}
-      disabled={isPending}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background disabled:opacity-50 ${
-        active ? 'bg-emerald-500' : 'bg-muted'
-      }`}
-    >
-      <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-          active ? 'translate-x-6' : 'translate-x-1'
-        }`}
-      />
-    </button>
   );
 }
