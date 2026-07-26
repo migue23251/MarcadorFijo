@@ -20,11 +20,14 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary Get current user profile
  */
+export const getMeResponseCurrencyDefault = `COP`;
+
 export const GetMeResponse = zod.object({
   "clerkId": zod.string(),
   "email": zod.string(),
   "name": zod.string().nullish(),
   "role": zod.enum(['user', 'admin']),
+  "currency": zod.string().default(getMeResponseCurrencyDefault).describe('Currency code for displaying amounts (e.g. COP, USD, EUR)'),
   "activeSubscription": zod.boolean(),
   "subscriptionExpiresAt": zod.string().nullish(),
   "createdAt": zod.string().optional()
@@ -35,14 +38,18 @@ export const GetMeResponse = zod.object({
  * @summary Update current user profile
  */
 export const UpdateMeBody = zod.object({
-  "name": zod.string().optional()
+  "name": zod.string().optional(),
+  "currency": zod.string().optional().describe('Currency code for displaying amounts (e.g. COP, USD, EUR)')
 })
+
+export const updateMeResponseCurrencyDefault = `COP`;
 
 export const UpdateMeResponse = zod.object({
   "clerkId": zod.string(),
   "email": zod.string(),
   "name": zod.string().nullish(),
   "role": zod.enum(['user', 'admin']),
+  "currency": zod.string().default(updateMeResponseCurrencyDefault).describe('Currency code for displaying amounts (e.g. COP, USD, EUR)'),
   "activeSubscription": zod.boolean(),
   "subscriptionExpiresAt": zod.string().nullish(),
   "createdAt": zod.string().optional()
@@ -52,11 +59,14 @@ export const UpdateMeResponse = zod.object({
 /**
  * @summary List all users (admin only)
  */
+export const listUsersResponseCurrencyDefault = `COP`;
+
 export const ListUsersResponseItem = zod.object({
   "clerkId": zod.string(),
   "email": zod.string(),
   "name": zod.string().nullish(),
   "role": zod.enum(['user', 'admin']),
+  "currency": zod.string().default(listUsersResponseCurrencyDefault).describe('Currency code for displaying amounts (e.g. COP, USD, EUR)'),
   "activeSubscription": zod.boolean(),
   "subscriptionExpiresAt": zod.string().nullish(),
   "createdAt": zod.string().optional()
@@ -76,11 +86,14 @@ export const UpdateUserSubscriptionBody = zod.object({
   "subscriptionExpiresAt": zod.string().nullish()
 })
 
+export const updateUserSubscriptionResponseCurrencyDefault = `COP`;
+
 export const UpdateUserSubscriptionResponse = zod.object({
   "clerkId": zod.string(),
   "email": zod.string(),
   "name": zod.string().nullish(),
   "role": zod.enum(['user', 'admin']),
+  "currency": zod.string().default(updateUserSubscriptionResponseCurrencyDefault).describe('Currency code for displaying amounts (e.g. COP, USD, EUR)'),
   "activeSubscription": zod.boolean(),
   "subscriptionExpiresAt": zod.string().nullish(),
   "createdAt": zod.string().optional()

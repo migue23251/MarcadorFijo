@@ -8,6 +8,7 @@ export const usersTable = pgTable("users", {
   email: text("email").notNull().default(""),
   name: text("name"),
   role: text("role").notNull().default("user"), // "user" | "admin"
+  currency: text("currency").notNull().default("COP"),
   activeSubscription: boolean("active_subscription").notNull().default(false),
   subscriptionExpiresAt: timestamp("subscription_expires_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

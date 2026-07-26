@@ -186,6 +186,22 @@ export default function Dashboard() {
     try { localStorage.setItem("rb_cups", JSON.stringify(selectedCups)); } catch {}
   }, [selectedCups]);
 
+  const handleAnalysisSuccess = useCallback((homeTeam: string, awayTeam: string) => {
+    setPersistedResults(prev => {
+      if (!prev) return prev;
+      const updated = prev.map(league => ({
+        ...league,
+        matches: league.matches.map(m =>
+          m.homeTeam === homeTeam && m.awayTeam === awayTeam
+            ? { ...m, hasAnalysis: true }
+            : m
+        ),
+      }));
+      try { localStorage.setItem("rb_radar", JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+  }, []);
+
   const handleRadarScan = useCallback(() => {
     if (radarRequestLockedRef.current || radarMutation.isPending) return;
     radarRequestLockedRef.current = true;
@@ -332,7 +348,7 @@ export default function Dashboard() {
                   <h3 className="text-sm font-semibold tracking-wider text-muted-foreground uppercase">{league.league}</h3>
                   <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                     {league.matches.map(match => (
-                      <MatchCard key={match.id} match={match} leagueName={league.league} />
+                      <MatchCard key={match.id} match={match} leagueName={league.league} onAnalysisSuccess={handleAnalysisSuccess} />
                     ))}
                   </div>
                 </div>
@@ -345,7 +361,7 @@ export default function Dashboard() {
   );
 }
 
-function MatchCard({ match, leagueName }: { match: Match, leagueName: string }) {
+function MatchCard({ match, leagueName, onAnalysisSuccess }: { match: Match, leagueName: string, onAnalysisSuccess: (homeTeam: string, awayTeam: string) => void }) {
   const [analysisModalOpen, setAnalysisModalOpen] = useState(false);
   const [loadCached, setLoadCached] = useState(false);
   const [retryCountdown, setRetryCountdown] = useState<number | null>(null);
@@ -378,9 +394,12 @@ function MatchCard({ match, leagueName }: { match: Match, leagueName: string }) 
     analyzeRequestLockedRef.current = true;
     analyzeMutation.mutate(
       { data: { homeTeam: match.homeTeam, awayTeam: match.awayTeam, league: leagueName, kickoffTime: match.kickoffTime } },
-      { onSettled: () => { analyzeRequestLockedRef.current = false; } },
+      {
+        onSuccess: () => { onAnalysisSuccess(match.homeTeam, match.awayTeam); },
+        onSettled: () => { analyzeRequestLockedRef.current = false; },
+      },
     );
-  }, [analyzeMutation, match.homeTeam, match.awayTeam, match.kickoffTime, leagueName]);
+  }, [analyzeMutation, match.homeTeam, match.awayTeam, match.kickoffTime, leagueName, onAnalysisSuccess]);
 
   const handleAnalyze = () => {
     setAnalysisModalOpen(true);
@@ -627,6 +646,8 @@ function BetModalContent({ prediction, match, leagueName, onClose }: { predictio
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { data: me } = useGetMe({ query: { queryKey: getGetMeQueryKey() } });
+  const currency = me?.currency ?? "COP";
   const createBet = useCreateBet();
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -690,7 +711,7 @@ function BetModalContent({ prediction, match, leagueName, onClose }: { predictio
           />
         </div>
         <div className="space-y-1">
-          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Monto (€)</label>
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Monto ({currency})</label>
           <input
             type="number" step="1" value={stake} onChange={e => setStake(e.target.value)}
             className="w-full bg-background border border-border px-3 py-2 rounded text-sm font-bold focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"

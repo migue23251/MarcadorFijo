@@ -344,6 +344,7 @@ components:
         - email
         - role
         - activeSubscription
+        - currency
       properties:
         clerkId:
           type: string
@@ -354,6 +355,10 @@ components:
         role:
           type: string
           enum: [user, admin]
+        currency:
+          type: string
+          default: COP
+          description: "Currency code for displaying amounts (e.g. COP, USD, EUR)"
         activeSubscription:
           type: boolean
         subscriptionExpiresAt:
@@ -366,6 +371,9 @@ components:
       properties:
         name:
           type: string
+        currency:
+          type: string
+          description: "Currency code for displaying amounts (e.g. COP, USD, EUR)"
 
     SubscriptionUpdate:
       type: object

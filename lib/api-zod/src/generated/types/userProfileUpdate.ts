@@ -8,4 +8,6 @@
 
 export interface UserProfileUpdate {
   name?: string;
+  /** Currency code for displaying amounts (e.g. COP, USD, EUR) */
+  currency?: string;
 }

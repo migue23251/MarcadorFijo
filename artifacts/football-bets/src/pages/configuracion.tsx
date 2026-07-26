@@ -7,7 +7,8 @@ import {
 import { useUser } from "@clerk/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { User, ShieldCheck, Loader2, Cpu } from "lucide-react";
+import { User, ShieldCheck, Loader2, Cpu, DollarSign } from "lucide-react";
+import { SUPPORTED_CURRENCIES } from "@/lib/currency";
 
 export default function Configuracion() {
   const { user } = useUser();
@@ -103,7 +104,28 @@ export default function Configuracion() {
           <div className="p-6">
             <ProfileForm
               currentName={me?.name ?? user?.fullName ?? ""}
+              currentCurrency={me?.currency ?? "COP"}
               email={me?.email ?? user?.primaryEmailAddress?.emailAddress ?? ""}
+              queryClient={queryClient}
+              toast={toast}
+            />
+          </div>
+        </section>
+
+        {/* Currency */}
+        <section className="bg-card border border-border rounded-xl overflow-hidden">
+          <div className="p-6 border-b border-border bg-secondary/20 flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-md">
+              <DollarSign className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold">Moneda</h2>
+              <p className="text-sm text-muted-foreground">Divisa en la que se muestran tus montos y retornos.</p>
+            </div>
+          </div>
+          <div className="p-6">
+            <CurrencyForm
+              currentCurrency={me?.currency ?? "COP"}
               queryClient={queryClient}
               toast={toast}
             />
@@ -161,11 +183,13 @@ function SubscriptionStatus({
 
 function ProfileForm({
   currentName,
+  currentCurrency,
   email,
   queryClient,
   toast,
 }: {
   currentName: string;
+  currentCurrency: string;
   email: string;
   queryClient: ReturnType<typeof useQueryClient>;
   toast: ReturnType<typeof useToast>["toast"];
@@ -184,7 +208,7 @@ function ProfileForm({
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     updateMe.mutate(
-      { data: { name } },
+      { data: { name, currency: currentCurrency } },
       {
         onSuccess: () => {
           toast({ title: "Perfil actualizado" });
@@ -225,6 +249,77 @@ function ProfileForm({
       >
         {updateMe.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
         Actualizar Perfil
+      </button>
+    </form>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Currency form
+// ---------------------------------------------------------------------------
+
+function CurrencyForm({
+  currentCurrency,
+  queryClient,
+  toast,
+}: {
+  currentCurrency: string;
+  queryClient: ReturnType<typeof useQueryClient>;
+  toast: ReturnType<typeof useToast>["toast"];
+}) {
+  const [currency, setCurrency] = useState(currentCurrency);
+  const updateMe = useUpdateMe();
+  const initRef = useRef(false);
+
+  useEffect(() => {
+    if (currentCurrency && !initRef.current) {
+      setCurrency(currentCurrency);
+      initRef.current = true;
+    }
+  }, [currentCurrency]);
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateMe.mutate(
+      { data: { currency } },
+      {
+        onSuccess: () => {
+          toast({ title: "Moneda actualizada" });
+          queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+        },
+      },
+    );
+  };
+
+  return (
+    <form onSubmit={handleSave} className="space-y-4 max-w-md">
+      <div className="space-y-1">
+        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          Moneda de operación
+        </label>
+        <select
+          value={currency}
+          onChange={(e) => setCurrency(e.target.value)}
+          className="w-full bg-background border border-border px-4 py-2 rounded-md text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all appearance-none cursor-pointer"
+        >
+          {SUPPORTED_CURRENCIES.map((c) => (
+            <option key={c.code} value={c.code}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-muted-foreground pt-1">
+          Afecta cómo se muestran los montos en el Historial y al registrar apuestas.
+        </p>
+      </div>
+
+      <button
+        type="submit"
+        disabled={updateMe.isPending || currency === currentCurrency}
+        className="px-6 py-2 bg-primary text-primary-foreground font-semibold rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2"
+      >
+        {updateMe.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+        Guardar Moneda
       </button>
     </form>
   );

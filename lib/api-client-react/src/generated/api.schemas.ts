@@ -23,6 +23,8 @@ export interface UserProfile {
   /** @nullable */
   name?: string | null;
   role: UserProfileRole;
+  /** Currency code for displaying amounts (e.g. COP, USD, EUR) */
+  currency: string;
   activeSubscription: boolean;
   /** @nullable */
   subscriptionExpiresAt?: string | null;
@@ -31,6 +33,8 @@ export interface UserProfile {
 
 export interface UserProfileUpdate {
   name?: string;
+  /** Currency code for displaying amounts (e.g. COP, USD, EUR) */
+  currency?: string;
 }
 
 export interface SubscriptionUpdate {

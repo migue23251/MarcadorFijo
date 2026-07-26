@@ -7,10 +7,13 @@ import {
   getGetBetStatsQueryKey,
   useUpdateBet,
   useGetCachedAnalysis,
+  useGetMe,
+  getGetMeQueryKey,
   ListBetsStatus,
   Bet,
   MatchAnalysis,
 } from "@workspace/api-client-react";
+import { formatCurrency } from "@/lib/currency";
 import {
   Check,
   X,
@@ -37,6 +40,8 @@ export default function Historial() {
     { status: statusFilter },
     { query: { queryKey: getListBetsQueryKey({ status: statusFilter }) } },
   );
+  const { data: me } = useGetMe({ query: { queryKey: getGetMeQueryKey() } });
+  const currency = me?.currency ?? "COP";
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -116,7 +121,7 @@ export default function Historial() {
                   </thead>
                   <tbody className="divide-y divide-border">
                     {bets.map((bet) => (
-                      <BetRow key={bet.id} bet={bet} />
+                      <BetRow key={bet.id} bet={bet} currency={currency} />
                     ))}
                   </tbody>
                 </table>
@@ -125,7 +130,7 @@ export default function Historial() {
               {/* Mobile cards */}
               <div className="md:hidden divide-y divide-border">
                 {bets.map((bet) => (
-                  <BetCard key={bet.id} bet={bet} />
+                  <BetCard key={bet.id} bet={bet} currency={currency} />
                 ))}
               </div>
             </>
@@ -197,7 +202,7 @@ function FilterButton({
 // Desktop BetRow (table row)
 // ---------------------------------------------------------------------------
 
-function BetRow({ bet }: { bet: Bet }) {
+function BetRow({ bet, currency }: { bet: Bet; currency: string }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const updateBet = useUpdateBet();
@@ -266,7 +271,7 @@ function BetRow({ bet }: { bet: Bet }) {
             {bet.odds.toFixed(2)}
           </span>
         </td>
-        <td className="px-4 py-3 text-right font-medium text-foreground">€{bet.stake.toFixed(2)}</td>
+        <td className="px-4 py-3 text-right font-medium text-foreground">{formatCurrency(bet.stake, currency)}</td>
         <td className="px-4 py-3 text-center">
           <span
             className={`px-2 py-1 text-xs font-semibold rounded-full border inline-flex items-center ${statusColors[bet.status]}`}
@@ -277,9 +282,9 @@ function BetRow({ bet }: { bet: Bet }) {
         </td>
         <td className="px-4 py-3 text-right font-bold">
           {bet.status === "won" ? (
-            <span className="text-emerald-500">+€{bet.returnAmount?.toFixed(2)}</span>
+            <span className="text-emerald-500">+{formatCurrency(bet.returnAmount ?? 0, currency)}</span>
           ) : bet.status === "lost" ? (
-            <span className="text-red-500">-€{bet.stake.toFixed(2)}</span>
+            <span className="text-red-500">-{formatCurrency(bet.stake, currency)}</span>
           ) : (
             <span className="text-muted-foreground">-</span>
           )}
@@ -336,7 +341,7 @@ function BetRow({ bet }: { bet: Bet }) {
 // Mobile BetCard
 // ---------------------------------------------------------------------------
 
-function BetCard({ bet }: { bet: Bet }) {
+function BetCard({ bet, currency }: { bet: Bet; currency: string }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const updateBet = useUpdateBet();
@@ -396,7 +401,7 @@ function BetCard({ bet }: { bet: Bet }) {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <span className="font-bold text-primary bg-primary/10 px-2 py-0.5 rounded text-sm">@{bet.odds.toFixed(2)}</span>
-            <span className="text-sm font-medium text-foreground">€{bet.stake.toFixed(2)}</span>
+            <span className="text-sm font-medium text-foreground">{formatCurrency(bet.stake, currency)}</span>
           </div>
         </div>
 
@@ -404,9 +409,9 @@ function BetCard({ bet }: { bet: Bet }) {
         <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/50">
           <div className="text-sm font-bold">
             {bet.status === "won" ? (
-              <span className="text-emerald-500">+€{bet.returnAmount?.toFixed(2)}</span>
+              <span className="text-emerald-500">+{formatCurrency(bet.returnAmount ?? 0, currency)}</span>
             ) : bet.status === "lost" ? (
-              <span className="text-red-500">-€{bet.stake.toFixed(2)}</span>
+              <span className="text-red-500">-{formatCurrency(bet.stake, currency)}</span>
             ) : (
               <span className="text-muted-foreground text-xs">Pendiente de resultado</span>
             )}

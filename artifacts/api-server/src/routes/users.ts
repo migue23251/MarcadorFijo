@@ -27,6 +27,7 @@ router.get("/users/me", requireAuth, async (req, res): Promise<void> => {
       email: user.email,
       name: user.name,
       role: user.role,
+      currency: user.currency,
       activeSubscription: user.activeSubscription,
       subscriptionExpiresAt: user.subscriptionExpiresAt?.toISOString() ?? null,
       createdAt: user.createdAt.toISOString(),
@@ -45,7 +46,10 @@ router.put("/users/me", requireAuth, async (req, res): Promise<void> => {
 
   const [updated] = await db
     .update(usersTable)
-    .set({ name: parsed.data.name })
+    .set({
+      name: parsed.data.name,
+      ...(parsed.data.currency !== undefined && { currency: parsed.data.currency }),
+    })
     .where(eq(usersTable.clerkId, user.clerkId))
     .returning();
 
@@ -55,6 +59,7 @@ router.put("/users/me", requireAuth, async (req, res): Promise<void> => {
       email: updated.email,
       name: updated.name,
       role: updated.role,
+      currency: updated.currency,
       activeSubscription: updated.activeSubscription,
       subscriptionExpiresAt: updated.subscriptionExpiresAt?.toISOString() ?? null,
       createdAt: updated.createdAt.toISOString(),
