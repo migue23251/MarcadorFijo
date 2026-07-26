@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { 
   useGetMe, 
   getGetMeQueryKey, 
@@ -9,7 +10,7 @@ import {
 import { Redirect } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { Shield, Users, Loader2 } from "lucide-react";
+import { Shield, Users, Loader2, RefreshCw, CheckCircle2, XCircle, AlertTriangle, HelpCircle } from "lucide-react";
 
 export default function Admin() {
   const { data: me, isLoading: meLoading } = useGetMe({ query: { queryKey: getGetMeQueryKey() } });
@@ -18,6 +19,86 @@ export default function Admin() {
   if (me?.role !== "admin") return <Redirect to="/dashboard" />;
 
   return <AdminPanel />;
+}
+
+interface VerificationSummary {
+  date: string;
+  totalPending: number;
+  fixturesFound: number;
+  resolved: number;
+  won: number;
+  lost: number;
+  voided: number;
+  notMatched: number;
+}
+
+function ResultVerificationPanel() {
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
+  const [summary, setSummary] = useState<VerificationSummary | null>(null);
+
+  const handleVerify = async () => {
+    setLoading(true);
+    setSummary(null);
+    try {
+      const res = await fetch("/api/admin/verificar-resultados", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Error desconocido");
+      setSummary(data.summary);
+      toast({ title: "Verificación completada", description: `${data.summary.resolved} apuestas resueltas.` });
+    } catch (err: any) {
+      toast({ title: "Error en la verificación", description: err.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-6 space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-bold tracking-tight flex items-center gap-2">
+            <RefreshCw className="w-5 h-5 text-primary" />
+            Verificación de Resultados
+          </h2>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Consulta los marcadores finales del día en API-Football y liquida todas las apuestas pendientes.
+            El cron lo ejecuta automáticamente a las 23:30 UTC.
+          </p>
+        </div>
+        <button
+          onClick={handleVerify}
+          disabled={loading}
+          className="shrink-0 inline-flex items-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
+        >
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+          {loading ? "Verificando…" : "Verificar ahora"}
+        </button>
+      </div>
+
+      {summary && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+          {[
+            { label: "Ganadas", value: summary.won, icon: CheckCircle2, color: "text-emerald-500" },
+            { label: "Perdidas", value: summary.lost, icon: XCircle, color: "text-red-500" },
+            { label: "Anuladas", value: summary.voided, icon: AlertTriangle, color: "text-yellow-500" },
+            { label: "Sin partido", value: summary.notMatched, icon: HelpCircle, color: "text-muted-foreground" },
+          ].map(({ label, value, icon: Icon, color }) => (
+            <div key={label} className="bg-secondary/40 rounded-lg p-3 flex flex-col gap-1">
+              <div className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider ${color}`}>
+                <Icon className="w-3.5 h-3.5" />
+                {label}
+              </div>
+              <span className="text-2xl font-bold text-foreground">{value}</span>
+            </div>
+          ))}
+          <p className="col-span-2 sm:col-span-4 text-xs text-muted-foreground">
+            Fecha: {summary.date} · {summary.totalPending} apuestas pendientes · {summary.fixturesFound} partidos encontrados en API-Football
+          </p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function AdminPanel() {
@@ -38,6 +119,8 @@ function AdminPanel() {
           <span className="font-semibold text-foreground">{users?.length || 0} Operadores</span>
         </div>
       </header>
+
+      <ResultVerificationPanel />
 
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         {isLoading ? (
