@@ -2,7 +2,10 @@ import { logger } from "./logger";
 import { db, radarCacheTable, analysisCacheTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 
-const API_FOOTBALL_BASE = "https://api-football-v1.p.rapidapi.com/v3";
+// Direct API-Sports endpoint — supports both x-apisports-key and x-rapidapi-* headers.
+// No trailing slash; append paths directly (e.g. `${API_FOOTBALL_BASE}/fixtures`).
+const API_FOOTBALL_BASE = "https://v3.football.api-sports.io";
+const API_FOOTBALL_HOST = "v3.football.api-sports.io";
 
 /** Cache key used for the full-day fixture dump (single API call). */
 const ALL_FIXTURES_CACHE_KEY = "af_all";
@@ -12,23 +15,23 @@ const ALL_FIXTURES_CACHE_KEY = "af_all";
 // ---------------------------------------------------------------------------
 
 const LEAGUE_ID_BY_NAME: Record<string, number> = {
-  "Premier League":    39,
-  "La Liga":           140,
-  "Serie A":           135,
-  "Bundesliga":        78,
-  "Ligue 1":           61,
-  "Champions League":  2,
-  "Europa League":     3,
+  "Premier League": 39,
+  "La Liga": 140,
+  "Serie A": 135,
+  Bundesliga: 78,
+  "Ligue 1": 61,
+  "Champions League": 2,
+  "Europa League": 3,
   "Conference League": 848,
-  "Eredivisie":        88,
-  "Primeira Liga":     94,
-  "Süper Lig":         203,
-  "MLS":               253,
-  "Liga MX":           262,
-  "Liga BetPlay":      239,
-  "Liga Profesional":  128,
-  "Brasileirão":       71,
-  "LigaPro Ecuador":   334,
+  Eredivisie: 88,
+  "Primeira Liga": 94,
+  "Süper Lig": 203,
+  MLS: 253,
+  "Liga MX": 262,
+  "Liga BetPlay": 239,
+  "Liga Profesional": 128,
+  Brasileirão: 71,
+  "LigaPro Ecuador": 334,
 };
 
 /** Reverse map: API-Football league ID → our display name */
@@ -62,18 +65,39 @@ export interface ApiFootballMatch {
 
 function mapStatus(short: string): string {
   switch (short) {
-    case "NS":   return "scheduled";
+    // Not started
+    case "NS":
+    case "TBD": // Time To Be Defined — date set but kickoff time not yet confirmed
+      return "scheduled";
+    // In play
     case "1H":
     case "2H":
-    case "ET":
-    case "BT":
-    case "P":
-    case "LIVE": return "live";
-    case "HT":   return "halftime";
+    case "ET":  // Extra Time
+    case "BT":  // Break Time (between ET halves)
+    case "P":   // Penalty shootout
+    case "LIVE":
+      return "live";
+    // Halftime
+    case "HT":
+      return "halftime";
+    // Finished
     case "FT":
-    case "AET":
-    case "PEN":  return "finished";
-    default:     return "postponed";
+    case "AET": // After Extra Time
+    case "PEN": // After Penalties
+    case "AWD": // Technical Loss (result awarded)
+    case "WO":  // WalkOver
+      return "finished";
+    // Cancelled / abandoned — show separately from postponed
+    case "CANC":
+    case "ABD": // Abandoned mid-match
+      return "cancelled";
+    // Postponed / interrupted
+    case "PST":  // Postponed
+    case "SUSP": // Suspended (will resume)
+    case "INT":  // Interrupted (temporarily stopped)
+      return "postponed";
+    default:
+      return "postponed";
   }
 }
 
@@ -105,30 +129,63 @@ function parseFixture(
 }
 
 /**
- * Fetch ALL fixtures for a given date in one API call.
- * Free tier allows 10 req/min and 100 req/day — one call covers every league.
+ * Fetch one page of fixtures from API-Football for a given date.
+ * Uses the correct v3.football.api-sports.io host (supports RapidAPI key headers).
+ * Passes timezone=UTC to ensure `date` filtering is unambiguous.
  */
-async function fetchAllFixturesForDate(date: string): Promise<any[]> {
+async function fetchFixturesPage(date: string, page: number): Promise<{ fixtures: any[]; totalPages: number }> {
   const apiKey = process.env["RAPIDAPI_KEY"];
   if (!apiKey) throw new Error("RAPIDAPI_KEY is not configured");
 
   const url = new URL(`${API_FOOTBALL_BASE}/fixtures`);
   url.searchParams.set("date", date);
+  url.searchParams.set("timezone", "UTC");
+  url.searchParams.set("page", String(page));
 
   const response = await fetch(url.toString(), {
     headers: {
-      "X-RapidAPI-Key": apiKey,
-      "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com",
+      // x-rapidapi-key is the auth token; x-rapidapi-host must match the actual
+      // API-Sports endpoint (v3.football.api-sports.io), NOT the RapidAPI proxy host.
+      "x-rapidapi-key": apiKey,
+      "x-rapidapi-host": API_FOOTBALL_HOST,
     },
   });
 
   if (!response.ok) {
     const text = await response.text().catch(() => "");
-    throw new Error(`API-Football ${response.status}: ${text.slice(0, 200)}`);
+    throw new Error(`API-Football HTTP ${response.status}: ${text.slice(0, 300)}`);
   }
 
   const data = (await response.json()) as any;
-  return (data?.response as any[]) ?? [];
+
+  // API returns HTTP 200 with errors in the body — always check
+  const bodyErrors = data?.errors;
+  if (bodyErrors && (Array.isArray(bodyErrors) ? bodyErrors.length > 0 : Object.keys(bodyErrors).length > 0)) {
+    const msg = Array.isArray(bodyErrors) ? bodyErrors.join("; ") : JSON.stringify(bodyErrors);
+    throw new Error(`API-Football error: ${msg}`);
+  }
+
+  const totalPages: number = data?.paging?.total ?? 1;
+  return { fixtures: (data?.response as any[]) ?? [], totalPages };
+}
+
+/**
+ * Fetch ALL fixtures for a given date, handling pagination automatically.
+ * Free tier: 100 req/day — one call per page (almost always 1 page for a single date).
+ */
+async function fetchAllFixturesForDate(date: string): Promise<any[]> {
+  const { fixtures: firstPage, totalPages } = await fetchFixturesPage(date, 1);
+
+  if (totalPages <= 1) return firstPage;
+
+  // Fetch remaining pages sequentially to be safe on rate limits
+  logger.info({ date, totalPages }, "API-Football fixtures: multiple pages detected");
+  const allFixtures = [...firstPage];
+  for (let page = 2; page <= totalPages; page++) {
+    const { fixtures } = await fetchFixturesPage(date, page);
+    allFixtures.push(...fixtures);
+  }
+  return allFixtures;
 }
 
 // ---------------------------------------------------------------------------
@@ -145,10 +202,9 @@ export async function getMatchesFromApiFootball(
 ): Promise<{ league: string; matches: ApiFootballMatch[] }[]> {
   const date = new Date().toISOString().split("T")[0];
   const wantedLeagueIds = new Set(
-    (leagues && leagues.length > 0
-      ? leagues
-      : Object.keys(LEAGUE_ID_BY_NAME)
-    ).map((name) => LEAGUE_ID_BY_NAME[name]).filter(Boolean),
+    (leagues && leagues.length > 0 ? leagues : Object.keys(LEAGUE_ID_BY_NAME))
+      .map((name) => LEAGUE_ID_BY_NAME[name])
+      .filter(Boolean),
   );
 
   // 1. Try cache (single row covers all leagues for today)
@@ -182,7 +238,10 @@ export async function getMatchesFromApiFootball(
           return { ...parseFixture(f, leagueName), hasAnalysis: false };
         });
 
-      logger.info({ date, total: allFixtures.length }, "API-Football all-fixtures fetched");
+      logger.info(
+        { date, total: allFixtures.length },
+        "API-Football all-fixtures fetched",
+      );
 
       // 3. Cache only if no live matches (live scores change every minute)
       const hasLive = allFixtures.some(
@@ -249,6 +308,9 @@ export async function getMatchesFromApiFootball(
   }
 
   return Object.keys(LEAGUE_ID_BY_NAME)
-    .filter((name) => byLeague.has(name) && wantedLeagueIds.has(LEAGUE_ID_BY_NAME[name]))
+    .filter(
+      (name) =>
+        byLeague.has(name) && wantedLeagueIds.has(LEAGUE_ID_BY_NAME[name]),
+    )
     .map((league) => ({ league, matches: byLeague.get(league)! }));
 }

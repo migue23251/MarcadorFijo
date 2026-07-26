@@ -59,7 +59,8 @@ function StatusBadge({ status }: { status: string }) {
     case "live":      return <Badge variant="live"><span className="flex items-center gap-1"><Activity className="w-2.5 h-2.5" />En Vivo</span></Badge>;
     case "halftime":  return <Badge variant="warning">Descanso</Badge>;
     case "finished":  return <Badge variant="outline">Finalizado</Badge>;
-    case "postponed": return <Badge variant="danger">Pospuesto</Badge>;
+    case "postponed": return <Badge variant="secondary">Pospuesto</Badge>;
+    case "cancelled": return <Badge variant="danger">Cancelado</Badge>;
     default:          return null; // "scheduled" — no badge needed, kickoff time is shown
   }
 }
@@ -265,8 +266,8 @@ function MatchCard({ match, leagueName }: { match: Match, leagueName: string }) 
   const analysis = match.hasAnalysis ? cachedAnalysisQuery.data : analyzeMutation.data;
   const isAnalyzing = match.hasAnalysis ? cachedAnalysisQuery.isFetching : analyzeMutation.isPending;
 
-  // Disable analysis for finished/postponed matches that aren't yet analyzed
-  const isFinished = match.status === "finished" || match.status === "postponed";
+  // Disable analysis for finished/postponed/cancelled matches that aren't yet analyzed
+  const isFinished = match.status === "finished" || match.status === "postponed" || match.status === "cancelled";
 
   const handleAnalyze = () => {
     if (analysis) { setExpanded((curr) => !curr); return; }
