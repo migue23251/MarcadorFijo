@@ -348,6 +348,7 @@ export default function Dashboard() {
 function MatchCard({ match, leagueName }: { match: Match, leagueName: string }) {
   const [expanded, setExpanded] = useState(false);
   const [loadCached, setLoadCached] = useState(false);
+  const [retryCountdown, setRetryCountdown] = useState<number | null>(null);
 
   const analyzeMutation = useAnalyzeMatch();
   const analyzeRequestLockedRef = useRef(false);
@@ -374,10 +375,7 @@ function MatchCard({ match, leagueName }: { match: Match, leagueName: string }) 
   // Can't run a new analysis once the match is underway or over; cached result still viewable
   const cannotAnalyzeNew = isFinished || isStarted;
 
-  const handleAnalyze = () => {
-    if (analysis) { setExpanded((curr) => !curr); return; }
-    if (match.hasAnalysis) { setLoadCached(true); setExpanded(true); return; }
-    if (cannotAnalyzeNew) return; // can't predict a started or finished match
+  const doAnalyze = useCallback(() => {
     if (analyzeMutation.isPending || analyzeRequestLockedRef.current) return;
     analyzeRequestLockedRef.current = true;
     setExpanded(true);
@@ -385,7 +383,43 @@ function MatchCard({ match, leagueName }: { match: Match, leagueName: string }) 
       { data: { homeTeam: match.homeTeam, awayTeam: match.awayTeam, league: leagueName, kickoffTime: match.kickoffTime } },
       { onSettled: () => { analyzeRequestLockedRef.current = false; } },
     );
+  }, [analyzeMutation, match.homeTeam, match.awayTeam, match.kickoffTime, leagueName]);
+
+  const handleAnalyze = () => {
+    if (analysis) { setExpanded((curr) => !curr); return; }
+    if (match.hasAnalysis) { setLoadCached(true); setExpanded(true); return; }
+    if (cannotAnalyzeNew) return;
+    doAnalyze();
   };
+
+  // Start countdown when Gemini returns a 429 with retryAfter
+  useEffect(() => {
+    if (!analyzeMutation.isError) { setRetryCountdown(null); return; }
+    const errData = (analyzeMutation.error as any)?.data as { retryAfter?: number } | undefined;
+    const secs = errData?.retryAfter;
+    if (!secs) return;
+    setRetryCountdown(secs);
+    const endMs = Date.now() + secs * 1000;
+    const id = setInterval(() => {
+      const left = Math.ceil((endMs - Date.now()) / 1000);
+      setRetryCountdown(left > 0 ? left : 0);
+      if (left <= 0) clearInterval(id);
+    }, 500);
+    return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analyzeMutation.isError, analyzeMutation.error]);
+
+  // Auto-retry once countdown reaches 0
+  const doAnalyzeRef = useRef(doAnalyze);
+  doAnalyzeRef.current = doAnalyze;
+  useEffect(() => {
+    if (retryCountdown !== 0) return;
+    setRetryCountdown(null);
+    analyzeMutation.reset();
+    const t = setTimeout(() => doAnalyzeRef.current(), 50);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [retryCountdown]);
 
   const showScore = match.score && (match.status === "live" || match.status === "halftime" || match.status === "finished");
 
@@ -462,9 +496,19 @@ function MatchCard({ match, leagueName }: { match: Match, leagueName: string }) 
       </div>
 
       {analyzeMutation.isError && (() => {
-        const errData = (analyzeMutation.error as any)?.data as { error?: string } | undefined;
+        const errData = (analyzeMutation.error as any)?.data as { error?: string; retryAfter?: number } | undefined;
+        const is429 = !!errData?.retryAfter;
         const errorMsg = errData?.error ?? (analyzeMutation.error as Error)?.message ?? "Error al analizar. Inténtalo de nuevo.";
-        return (
+        return is429 ? (
+          <div className="border-t border-border bg-amber-500/5 p-3 flex items-center gap-2 text-sm text-amber-400">
+            <Clock className="w-4 h-4 shrink-0 animate-pulse" />
+            <p>
+              {retryCountdown !== null && retryCountdown > 0
+                ? `Límite de Gemini — reintentando en ${retryCountdown}s...`
+                : "Reintentando análisis..."}
+            </p>
+          </div>
+        ) : (
           <div className="border-t border-border bg-red-500/5 p-3 flex items-start gap-2 text-sm text-red-400">
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
             <p>{errorMsg}</p>
