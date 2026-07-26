@@ -4,6 +4,7 @@ import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import { Switch, Route, Link, useLocation, Router as WouterRouter, Redirect } from 'wouter';
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { ThemeProvider, useTheme } from 'next-themes';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
@@ -35,54 +36,75 @@ function stripBase(path: string): string {
     : path;
 }
 
-const clerkAppearance = {
-  theme: shadcn,
-  cssLayerName: "clerk",
-  options: {
-    logoPlacement: "inside" as const,
-    logoLinkUrl: basePath || "/",
-    logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
-  },
-  variables: {
-    colorPrimary: "#22c55e",
-    colorForeground: "#f0f6fc",
-    colorMutedForeground: "#8b949e",
-    colorDanger: "#f85149",
-    colorBackground: "#0d1117",
-    colorInput: "#161b22",
-    colorInputForeground: "#f0f6fc",
-    colorNeutral: "#30363d",
-    fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, sans-serif",
-    borderRadius: "0.25rem",
-  },
-  elements: {
-    rootBox: "w-full flex justify-center",
-    cardBox: "bg-[#161b22] border border-[#30363d] rounded-md w-[440px] max-w-full overflow-hidden",
-    card: "!shadow-none !border-0 !bg-transparent !rounded-none",
-    footer: "!shadow-none !border-0 !bg-transparent !rounded-none",
-    headerTitle: "text-[#f0f6fc]",
-    headerSubtitle: "text-[#8b949e]",
-    socialButtonsBlockButtonText: "text-[#f0f6fc]",
-    formFieldLabel: "text-[#f0f6fc]",
-    footerActionLink: "text-[#22c55e] hover:text-[#22c55e]/80",
-    footerActionText: "text-[#8b949e]",
-    dividerText: "text-[#8b949e]",
-    identityPreviewEditButton: "text-[#22c55e]",
-    formFieldSuccessText: "text-[#22c55e]",
-    alertText: "text-[#f0f6fc]",
-    logoBox: "mb-6 flex justify-center",
-    logoImage: "h-12",
-    socialButtonsBlockButton: "border-[#30363d] bg-[#0d1117] hover:bg-[#21262d]",
-    formButtonPrimary: "bg-[#22c55e] text-[#0d1117] hover:bg-[#22c55e]/90 font-semibold",
-    formFieldInput: "bg-[#0d1117] border-[#30363d] text-[#f0f6fc]",
-    footerAction: "bg-transparent",
-    dividerLine: "bg-[#30363d]",
-    alert: "bg-[#21262d] border-[#30363d]",
-    otpCodeFieldInput: "bg-[#0d1117] border-[#30363d]",
-    formFieldRow: "mb-4",
-    main: "w-full",
-  },
-};
+function buildClerkAppearance(isDark: boolean) {
+  const vars = isDark
+    ? {
+        colorPrimary: "#22c55e",
+        colorForeground: "#f0f6fc",
+        colorMutedForeground: "#8b949e",
+        colorDanger: "#f85149",
+        colorBackground: "#0d1117",
+        colorInput: "#161b22",
+        colorInputForeground: "#f0f6fc",
+        colorNeutral: "#30363d",
+      }
+    : {
+        colorPrimary: "#1a9e4a",
+        colorForeground: "#1c2330",
+        colorMutedForeground: "#6e7781",
+        colorDanger: "#e5130b",
+        colorBackground: "#ffffff",
+        colorInput: "#ffffff",
+        colorInputForeground: "#1c2330",
+        colorNeutral: "#d0d7de",
+      };
+
+  const el = isDark
+    ? {
+        cardBox: "bg-[#161b22] border border-[#30363d] rounded-md w-[440px] max-w-full overflow-hidden",
+        socialButtonsBlockButton: "border-[#30363d] bg-[#0d1117] hover:bg-[#21262d]",
+        formButtonPrimary: "bg-[#22c55e] text-[#0d1117] hover:bg-[#22c55e]/90 font-semibold",
+        formFieldInput: "bg-[#0d1117] border-[#30363d] text-[#f0f6fc]",
+        alert: "bg-[#21262d] border-[#30363d]",
+        otpCodeFieldInput: "bg-[#0d1117] border-[#30363d]",
+        dividerLine: "bg-[#30363d]",
+      }
+    : {
+        cardBox: "bg-white border border-[#d0d7de] rounded-md w-[440px] max-w-full overflow-hidden",
+        socialButtonsBlockButton: "border-[#d0d7de] bg-white hover:bg-[#f3f6f8]",
+        formButtonPrimary: "bg-[#1a9e4a] text-white hover:bg-[#1a9e4a]/90 font-semibold",
+        formFieldInput: "bg-white border-[#d0d7de] text-[#1c2330]",
+        alert: "bg-[#f3f6f8] border-[#d0d7de]",
+        otpCodeFieldInput: "bg-white border-[#d0d7de]",
+        dividerLine: "bg-[#d0d7de]",
+      };
+
+  return {
+    theme: shadcn,
+    cssLayerName: "clerk",
+    options: {
+      logoPlacement: "inside" as const,
+      logoLinkUrl: basePath || "/",
+      logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
+    },
+    variables: {
+      ...vars,
+      fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, sans-serif",
+      borderRadius: "0.25rem",
+    },
+    elements: {
+      rootBox: "w-full flex justify-center",
+      card: "!shadow-none !border-0 !bg-transparent !rounded-none",
+      footer: "!shadow-none !border-0 !bg-transparent !rounded-none",
+      logoBox: "mb-6 flex justify-center",
+      logoImage: "h-12",
+      footerAction: "bg-transparent",
+      formFieldRow: "mb-4",
+      main: "w-full",
+      ...el,
+    },
+  };
+}
 
 function SignInPage() {
   return (
@@ -200,12 +222,14 @@ function Router() {
 
 function ClerkProviderWithRoutes() {
   const [, setLocation] = useLocation();
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
 
   return (
     <ClerkProvider
       publishableKey={clerkPubKey}
       proxyUrl={clerkProxyUrl}
-      appearance={clerkAppearance}
+      appearance={buildClerkAppearance(isDark)}
       signInUrl={`${basePath}/sign-in`}
       signUpUrl={`${basePath}/sign-up`}
       localization={{
@@ -237,23 +261,25 @@ function ClerkProviderWithRoutes() {
 }
 
 function App() {
-  if (!hasUsableClerkKey) {
-    return (
-      <WouterRouter base={basePath}>
-        <Switch>
-          <Route path="/" component={Home} />
-          <Route path="/sign-in/*?" component={() => <AuthUnavailablePage mode="sign-in" />} />
-          <Route path="/sign-up/*?" component={() => <AuthUnavailablePage mode="sign-up" />} />
-          <Route component={Home} />
-        </Switch>
-      </WouterRouter>
-    );
-  }
-
-  return (
+  const inner = !hasUsableClerkKey ? (
+    <WouterRouter base={basePath}>
+      <Switch>
+        <Route path="/" component={Home} />
+        <Route path="/sign-in/*?" component={() => <AuthUnavailablePage mode="sign-in" />} />
+        <Route path="/sign-up/*?" component={() => <AuthUnavailablePage mode="sign-up" />} />
+        <Route component={Home} />
+      </Switch>
+    </WouterRouter>
+  ) : (
     <WouterRouter base={basePath}>
       <ClerkProviderWithRoutes />
     </WouterRouter>
+  );
+
+  return (
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+      {inner}
+    </ThemeProvider>
   );
 }
 

@@ -3,6 +3,7 @@ import { Radar, History, Settings, Shield, LogOut } from "lucide-react";
 import { useUser, useClerk } from "@clerk/react";
 import { useGetMe, getGetMeQueryKey } from "@workspace/api-client-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 const navItems = [
   { href: "/dashboard", label: "Radar", icon: Radar },
@@ -76,6 +77,7 @@ export function Sidebar() {
               <span className="text-xs text-muted-foreground truncate">{user?.primaryEmailAddress?.emailAddress}</span>
             </div>
           </div>
+          <ThemeToggle variant="full" />
           <button 
             onClick={handleSignOut}
             className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"

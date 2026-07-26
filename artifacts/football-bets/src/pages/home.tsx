@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { Radar, Target, TrendingUp, ShieldCheck } from "lucide-react";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 export default function Home() {
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -11,8 +12,9 @@ export default function Home() {
           <img src={`${basePath}/logo.svg`} alt="MarcadorFijo" className="w-8 h-8" />
           <span className="text-xl font-bold tracking-tight text-primary">MarcadorFijo</span>
         </div>
-        <div className="flex items-center gap-4">
-          <Link href="/sign-in" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <Link href="/sign-in" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-2">
             Entrar
           </Link>
           <Link href="/sign-up" className="text-sm font-medium bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition-colors">
