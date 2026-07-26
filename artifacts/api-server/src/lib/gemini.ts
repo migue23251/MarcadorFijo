@@ -121,21 +121,27 @@ export async function listAvailableModels(apiKey: string): Promise<GeminiModelIn
   try {
     const models: GeminiModelInfo[] = [];
     const pager = await ai.models.list();
+    const allRaw: string[] = [];
     for await (const model of pager) {
       const name: string = model.name ?? "";
+      allRaw.push(name);
 
       // Only keep models that support generateContent
-      const actions: string[] = (model as any).supportedActions ?? [];
-      if (!actions.includes("generateContent")) continue;
+      const methods: string[] = (model as any).supportedGenerationMethods ?? [];
+      if (!methods.includes("generateContent")) continue;
 
-      // Skip models that can't generate text predictions
+      // Skip non-text-prediction model families by name
       const nameLower = name.toLowerCase();
       if (
         nameLower.includes("embedding") ||
-        nameLower.includes("tts") ||
-        nameLower.includes("imagen") ||
-        nameLower.includes("robotics") ||
-        nameLower.includes("antigravity")
+        nameLower.includes("tts")        ||
+        nameLower.includes("imagen")     ||
+        nameLower.includes("image-gen")  ||
+        nameLower.includes("image-generation") ||
+        nameLower.includes("robotics")   ||
+        nameLower.includes("antigravity")||
+        nameLower.includes("deepsearch") ||
+        nameLower.includes("deep-search")
       ) continue;
       // Strip the "models/" prefix to get a clean id like "gemini-2.0-flash"
       const id = name.startsWith("models/") ? name.slice("models/".length) : name;
@@ -148,6 +154,7 @@ export async function listAvailableModels(apiKey: string): Promise<GeminiModelIn
       });
     }
 
+    logger.info({ allRaw }, "Raw Gemini model names from API");
     // Sort: newer/more capable models first
     return models.sort((a, b) => a.displayName.localeCompare(b.displayName));
   } catch (err: any) {
