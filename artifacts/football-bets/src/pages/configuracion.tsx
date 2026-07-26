@@ -36,22 +36,16 @@ const GEMINI_MODELS = [
     badge: "Pro",
   },
   {
-    id: "gemini-1.5-pro",
+    id: "gemini-1.5-pro-001",
     label: "Gemini 1.5 Pro",
     description: "Modelo Pro de generación anterior. Alta calidad.",
     badge: null,
   },
   {
-    id: "gemini-1.5-flash",
+    id: "gemini-1.5-flash-001",
     label: "Gemini 1.5 Flash",
     description: "Flash de generación anterior. Muy económico.",
     badge: null,
-  },
-  {
-    id: "gemini-1.5-flash-001",
-    label: "Gemini 1.5 Flash 001",
-    description: "Versión estable específica del 1.5 Flash. Útil si el alias genérico da cuota agotada.",
-    badge: "Prueba",
   },
 ];
 
