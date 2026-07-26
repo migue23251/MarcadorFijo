@@ -8,6 +8,7 @@ import {
   clerkProxyMiddleware,
   getClerkProxyHost,
 } from "./middlewares/clerkProxyMiddleware";
+import healthRouter from "./routes/health";
 import router from "./routes";
 import { logger } from "./lib/logger";
 
@@ -40,15 +41,20 @@ app.use(cors({ credentials: true, origin: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Keep the service health check available while optional auth is not configured.
+app.use("/api", healthRouter);
+
 // Resolve publishable key from request host so the same server works in
 // dev and prod with any Clerk custom domain
 app.use(
-  clerkMiddleware((req) => ({
-    publishableKey: publishableKeyFromHost(
-      getClerkProxyHost(req) ?? "",
-      process.env.CLERK_PUBLISHABLE_KEY,
-    ),
-  })),
+  process.env.CLERK_SECRET_KEY
+    ? clerkMiddleware((req) => ({
+        publishableKey: publishableKeyFromHost(
+          getClerkProxyHost(req) ?? "",
+          process.env.CLERK_PUBLISHABLE_KEY,
+        ),
+      }))
+    : (_req, _res, next) => next(),
 );
 
 app.use("/api", router);

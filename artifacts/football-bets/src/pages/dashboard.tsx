@@ -56,7 +56,7 @@ const COPAS = [
   { id: "mundial",          label: "Copa Mundial FIFA", flag: "🌍" },
 ];
 
-function Badge({ children, variant = "default", className = "" }: { children: React.ReactNode, variant?: "default" | "success" | "warning" | "danger" | "outline" | "live", className?: string }) {
+function Badge({ children, variant = "default", className = "" }: { children: React.ReactNode, variant?: "default" | "success" | "warning" | "danger" | "outline" | "live" | "secondary", className?: string }) {
   const variants = {
     default:  "bg-primary/20 text-primary border border-primary/30",
     success:  "bg-emerald-500/20 text-emerald-500 border border-emerald-500/30",
@@ -64,6 +64,7 @@ function Badge({ children, variant = "default", className = "" }: { children: Re
     danger:   "bg-red-500/20 text-red-500 border border-red-500/30",
     outline:  "bg-transparent text-muted-foreground border border-border",
     live:     "bg-red-500/90 text-white border border-red-400 animate-pulse",
+    secondary: "bg-secondary text-secondary-foreground border border-border",
   };
   return (
     <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${variants[variant]} ${className}`}>
