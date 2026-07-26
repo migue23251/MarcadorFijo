@@ -290,11 +290,11 @@ export default function Dashboard() {
         <div className="p-8 flex flex-col items-center justify-center min-h-[260px] text-center relative z-20">
           <button
             onClick={handleRadarScan}
-            disabled={!isActive || radarMutation.isPending}
+            disabled={radarMutation.isPending}
             className={`relative group flex flex-col items-center justify-center w-40 h-40 rounded-full transition-all duration-500 ${
-              radarMutation.isPending ? "bg-primary/20 scale-105" : 
-              !isActive ? "bg-muted cursor-not-allowed opacity-50" : 
-              "bg-primary/10 hover:bg-primary/20 hover:scale-105 cursor-pointer border border-primary/30"
+              radarMutation.isPending
+                ? "bg-primary/20 scale-105"
+                : "bg-primary/10 hover:bg-primary/20 hover:scale-105 cursor-pointer border border-primary/30"
             }`}
           >
             {radarMutation.isPending && <div className="radar-sweep" />}
@@ -305,16 +305,37 @@ export default function Dashboard() {
           </button>
 
           {!isActive && (
-            <p className="mt-6 text-sm text-destructive font-medium">Suscripción requerida — Contacta al administrador</p>
+            <p className="mt-6 text-xs text-muted-foreground">
+              Modo freemium · 1 análisis gratuito por día
+            </p>
           )}
         </div>
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none z-10" />
       </div>
 
       {radarMutation.isError && (() => {
-        const errData = (radarMutation.error as any)?.data as { error?: string; retryAfter?: number } | undefined;
+        const errData = (radarMutation.error as any)?.data as { error?: string; retryAfter?: number; code?: string } | undefined;
         const is429 = (radarMutation.error as any)?.status === 429 || !!errData?.retryAfter;
+        const isFreemiumBlocked = errData?.code === "FREEMIUM_DISABLED";
         const errorMsg = errData?.error ?? (radarMutation.error as Error)?.message ?? "Error inesperado. Inténtalo de nuevo.";
+
+        if (isFreemiumBlocked) {
+          return (
+            <div className="bg-card border border-primary/30 p-4 rounded-md flex items-start gap-3">
+              <Crown className="w-5 h-5 shrink-0 mt-0.5 text-primary" />
+              <div className="text-sm flex-1">
+                <p className="font-semibold mb-1 text-foreground">Acceso gratuito desactivado</p>
+                <p className="text-muted-foreground mb-3">{errorMsg}</p>
+                <button
+                  onClick={() => setConversionModalOpen(true)}
+                  className="flex items-center gap-2 px-4 py-1.5 bg-primary text-primary-foreground rounded text-xs font-semibold hover:bg-primary/90 transition-colors"
+                >
+                  <Zap className="w-3.5 h-3.5" /> Ver planes
+                </button>
+              </div>
+            </div>
+          );
+        }
 
         return is429 ? (
           <div className="bg-amber-500/10 border border-amber-500/30 text-amber-400 p-4 rounded-md flex items-start gap-3">

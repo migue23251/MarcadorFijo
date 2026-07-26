@@ -67,15 +67,36 @@ router.get(
 );
 
 // POST /matches/radar — fetches today's fixtures from API-Football
+// Subscribed users: unlimited. Freemium users: allowed when freemiumEnabled=true.
 router.post(
   "/matches/radar",
   requireAuth,
-  requireSubscription,
   async (req, res): Promise<void> => {
+    const user = (req as AuthenticatedRequest).dbUser;
     const parsed = RadarMatchesBody.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.message });
       return;
+    }
+
+    const isSubscribed =
+      user.isSubscriptionActive &&
+      isSubscriptionCurrentlyActive(user.subscriptionExpiresAt);
+
+    if (!isSubscribed) {
+      const [settings] = await db
+        .select()
+        .from(systemSettingsTable)
+        .where(eq(systemSettingsTable.id, 1))
+        .limit(1);
+
+      if (!(settings?.freemiumEnabled ?? true)) {
+        res.status(403).json({
+          error: "El acceso gratuito está desactivado. Adquiere una suscripción para usar el radar.",
+          code: "FREEMIUM_DISABLED",
+        });
+        return;
+      }
     }
 
     try {
