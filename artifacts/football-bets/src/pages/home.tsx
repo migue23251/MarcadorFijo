@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link } from "wouter";
 import {
   Radar,
@@ -97,8 +98,16 @@ function ProbBar({ label, value }: { label: string; value: number }) {
 export default function Home() {
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+  // The global CSS locks overflow:hidden on html/body for the app shell.
+  // Re-enable scrolling while the landing page is mounted.
+  useEffect(() => {
+    const els = [document.documentElement, document.body];
+    els.forEach((el) => (el.style.overflow = "auto"));
+    return () => els.forEach((el) => (el.style.overflow = ""));
+  }, []);
+
   return (
-    <div className="min-h-[100dvh] bg-background text-foreground flex flex-col selection:bg-primary/30 overflow-y-auto">
+    <div className="min-h-[100dvh] bg-background text-foreground flex flex-col selection:bg-primary/30">
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <header className="sticky top-0 left-0 right-0 h-16 flex items-center justify-between px-4 md:px-8 border-b border-border bg-background/80 backdrop-blur-md z-50">
