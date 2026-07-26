@@ -524,8 +524,15 @@ function MatchCard({ match, leagueName, onAnalysisSuccess, onFreemiumBlocked }: 
     }
   );
 
-  const analysis = match.hasAnalysis ? cachedAnalysisQuery.data : analyzeMutation.data;
-  const isAnalyzing = match.hasAnalysis ? cachedAnalysisQuery.isFetching : analyzeMutation.isPending;
+  // Si match.hasAnalysis acaba de volverse true (justo terminó el análisis),
+  // cachedAnalysisQuery.data aún no existe porque loadCached=false.
+  // Usamos analyzeMutation.data como fallback para no dejar el modal vacío.
+  const analysis = match.hasAnalysis
+    ? (cachedAnalysisQuery.data ?? analyzeMutation.data)
+    : analyzeMutation.data;
+  const isAnalyzing = match.hasAnalysis
+    ? (cachedAnalysisQuery.isFetching && !analyzeMutation.data)
+    : analyzeMutation.isPending;
 
   const isFinished = match.status === "finished" || match.status === "postponed" || match.status === "cancelled";
   const isStarted = match.status === "live" || match.status === "halftime";
