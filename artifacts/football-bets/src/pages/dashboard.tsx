@@ -12,8 +12,8 @@ import {
   Match,
   Prediction
 } from "@workspace/api-client-react";
-import { Radar, AlertTriangle, ChevronDown, Check, Loader2, Target, Info, Trophy, Clock, RefreshCw, Activity } from "lucide-react";
-import { Link } from "wouter";
+import { Radar, AlertTriangle, ChevronDown, Check, Loader2, Target, Info, Trophy, Clock, RefreshCw, Activity, Crown, Zap, X } from "lucide-react";
+import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -170,6 +170,8 @@ function MultiSelectDropdown({
 export default function Dashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
+  const [conversionModalOpen, setConversionModalOpen] = useState(false);
 
   const { data: me } = useGetMe({ query: { queryKey: getGetMeQueryKey() } });
 
@@ -228,12 +230,28 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold tracking-tight">Centro de Operaciones</h1>
           <p className="text-muted-foreground">Partidos reales · Predicciones con Gemini AI.</p>
         </div>
-        <div className="flex items-center gap-3 bg-card px-4 py-2 rounded-md border border-border">
-          <span className="text-sm font-medium">Estado:</span>
-          {isActive ? (
-            <Badge variant="success">Suscripción Activa</Badge>
-          ) : (
-            <Badge variant="danger">Sin Suscripción</Badge>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-3 bg-card px-4 py-2 rounded-md border border-border">
+            <span className="text-sm font-medium">Estado:</span>
+            {isActive ? (
+              <Badge variant="success">Suscripción Activa</Badge>
+            ) : (
+              <Badge variant="danger">Sin Suscripción</Badge>
+            )}
+          </div>
+          {!isActive && me && (
+            <button
+              onClick={() => setConversionModalOpen(true)}
+              className="flex items-center gap-2.5 bg-card px-4 py-2 rounded-md border border-primary/40 hover:border-primary/70 transition-colors"
+            >
+              <Zap className="w-3.5 h-3.5 text-primary" />
+              <span className="text-sm font-medium">
+                Análisis gratuitos hoy:{" "}
+                <span className={me.dailyFreeAnalysesUsed >= 1 ? "text-destructive font-bold" : "text-primary font-bold"}>
+                  {me.dailyFreeAnalysesUsed}/1
+                </span>
+              </span>
+            </button>
           )}
         </div>
       </header>
@@ -349,7 +367,13 @@ export default function Dashboard() {
                   <h3 className="text-sm font-semibold tracking-wider text-muted-foreground uppercase">{league.league}</h3>
                   <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                     {league.matches.map(match => (
-                      <MatchCard key={match.id} match={match} leagueName={league.league} onAnalysisSuccess={handleAnalysisSuccess} />
+                      <MatchCard
+                        key={match.id}
+                        match={match}
+                        leagueName={league.league}
+                        onAnalysisSuccess={handleAnalysisSuccess}
+                        onFreemiumBlocked={() => setConversionModalOpen(true)}
+                      />
                     ))}
                   </div>
                 </div>
@@ -358,17 +382,113 @@ export default function Dashboard() {
           </div>
         );
       })()}
+
+      <SubscriptionConversionModal
+        open={conversionModalOpen}
+        onClose={() => setConversionModalOpen(false)}
+        onNavigate={() => { setConversionModalOpen(false); setLocation("/configuracion"); }}
+      />
     </div>
   );
 }
 
-function MatchCard({ match, leagueName, onAnalysisSuccess }: { match: Match, leagueName: string, onAnalysisSuccess: (homeTeam: string, awayTeam: string) => void }) {
+/* ─── Subscription conversion modal ─────────────────────────────────────── */
+
+const CONVERSION_PLANS = [
+  { id: "mensual",    label: "Mensual",    price: "$39.900",  period: "/mes",      savings: null, popular: false },
+  { id: "trimestral", label: "Trimestral", price: "$99.900",  period: "/3 meses",  savings: 17,   popular: true  },
+  { id: "semestral",  label: "Semestral",  price: "$179.900", period: "/6 meses",  savings: 25,   popular: false },
+  { id: "anual",      label: "Anual",      price: "$299.900", period: "/año",       savings: 37,   popular: false },
+];
+
+function SubscriptionConversionModal({
+  open,
+  onClose,
+  onNavigate,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onNavigate: () => void;
+}) {
+  return (
+    <Dialog.Root open={open} onOpenChange={v => { if (!v) onClose(); }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 animate-in fade-in" />
+        <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-2rem)] max-w-lg bg-card border border-border rounded-xl shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-200">
+          {/* Header */}
+          <div className="flex items-start justify-between gap-4 p-5 border-b border-border">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <Crown className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <Dialog.Title className="text-base font-bold">Desbloquea análisis ilimitados</Dialog.Title>
+                <p className="text-xs text-muted-foreground mt-0.5">Has agotado tu análisis gratuito de hoy.</p>
+              </div>
+            </div>
+            <Dialog.Close className="p-1.5 rounded-md hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground shrink-0">
+              <X className="w-4 h-4" />
+            </Dialog.Close>
+          </div>
+
+          {/* Plan grid */}
+          <div className="p-5 grid grid-cols-2 gap-3">
+            {CONVERSION_PLANS.map(plan => (
+              <div
+                key={plan.id}
+                className={`relative rounded-lg border p-4 flex flex-col gap-1 transition-colors ${
+                  plan.popular
+                    ? "border-primary/60 bg-primary/5"
+                    : "border-border bg-secondary/20"
+                }`}
+              >
+                {plan.popular && (
+                  <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full whitespace-nowrap">
+                    MÁS POPULAR
+                  </span>
+                )}
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{plan.label}</span>
+                <span className="text-xl font-black text-foreground">{plan.price}</span>
+                <span className="text-xs text-muted-foreground">{plan.period}</span>
+                {plan.savings && (
+                  <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded px-1.5 py-0.5 w-fit mt-0.5">
+                    Ahorra {plan.savings}%
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Footer */}
+          <div className="px-5 pb-5 flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={onNavigate}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors text-sm"
+            >
+              <Zap className="w-4 h-4" />
+              Ver planes y suscribirme
+            </button>
+            <button
+              onClick={onClose}
+              className="px-4 py-2.5 text-sm font-medium text-muted-foreground hover:bg-secondary rounded-lg transition-colors"
+            >
+              Más tarde
+            </button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+function MatchCard({ match, leagueName, onAnalysisSuccess, onFreemiumBlocked }: { match: Match, leagueName: string, onAnalysisSuccess: (homeTeam: string, awayTeam: string) => void, onFreemiumBlocked: () => void }) {
   const [analysisModalOpen, setAnalysisModalOpen] = useState(false);
   const [loadCached, setLoadCached] = useState(false);
   const [retryCountdown, setRetryCountdown] = useState<number | null>(null);
 
   const analyzeMutation = useAnalyzeMatch();
   const analyzeRequestLockedRef = useRef(false);
+  const queryClient = useQueryClient();
 
   const cachedAnalysisParams = { homeTeam: match.homeTeam, awayTeam: match.awayTeam, league: leagueName };
   const cachedAnalysisQuery = useGetCachedAnalysis(
@@ -397,10 +517,21 @@ function MatchCard({ match, leagueName, onAnalysisSuccess }: { match: Match, lea
       { data: { homeTeam: match.homeTeam, awayTeam: match.awayTeam, league: leagueName, kickoffTime: match.kickoffTime } },
       {
         onSuccess: () => { onAnalysisSuccess(match.homeTeam, match.awayTeam); },
-        onSettled: () => { analyzeRequestLockedRef.current = false; },
+        onError: (err) => {
+          const errData = (err as any)?.data as { code?: string } | undefined;
+          if (errData?.code === "FREEMIUM_LIMIT_REACHED" || errData?.code === "FREEMIUM_DISABLED") {
+            setAnalysisModalOpen(false);
+            onFreemiumBlocked();
+          }
+        },
+        onSettled: () => {
+          analyzeRequestLockedRef.current = false;
+          // Refresh freemium counter (dailyFreeAnalysesUsed may have changed)
+          queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+        },
       },
     );
-  }, [analyzeMutation, match.homeTeam, match.awayTeam, match.kickoffTime, leagueName, onAnalysisSuccess]);
+  }, [analyzeMutation, match.homeTeam, match.awayTeam, match.kickoffTime, leagueName, onAnalysisSuccess, onFreemiumBlocked, queryClient]);
 
   const handleAnalyze = () => {
     setAnalysisModalOpen(true);

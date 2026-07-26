@@ -7,7 +7,7 @@ import {
 import { useUser } from "@clerk/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { User, ShieldCheck, Loader2, Cpu, DollarSign } from "lucide-react";
+import { User, ShieldCheck, Loader2, Cpu, DollarSign, Check, Crown, TrendingDown } from "lucide-react";
 import { SUPPORTED_CURRENCIES } from "@/lib/currency";
 
 export default function Configuracion() {
@@ -71,20 +71,26 @@ export default function Configuracion() {
           </div>
         </section>
 
-        {/* Subscription Status */}
+        {/* Subscription Status + Pricing */}
         <section className="bg-card border border-border rounded-xl overflow-hidden">
           <div className="p-6 border-b border-border bg-secondary/20 flex items-center gap-3">
             <div className="p-2 bg-primary/10 rounded-md">
               <ShieldCheck className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold">Estado de Suscripción</h2>
-              <p className="text-sm text-muted-foreground">Acceso al Radar y al motor de análisis.</p>
+              <h2 className="text-lg font-semibold">Suscripción</h2>
+              <p className="text-sm text-muted-foreground">Planes y estado de acceso al motor de análisis.</p>
             </div>
           </div>
-          <div className="p-6">
+          <div className="p-6 space-y-6">
             <SubscriptionStatus
               active={me?.activeSubscription}
+              expiresAt={me?.subscriptionExpiresAt ?? null}
+              plan={me?.subscriptionPlan}
+            />
+            <PricingCards
+              active={me?.activeSubscription}
+              currentPlan={me?.subscriptionPlan}
               expiresAt={me?.subscriptionExpiresAt ?? null}
             />
           </div>
@@ -138,41 +144,188 @@ export default function Configuracion() {
 }
 
 // ---------------------------------------------------------------------------
+// Pricing plans
+// ---------------------------------------------------------------------------
+
+const PLANS = [
+  {
+    id: "mensual",
+    label: "Mensual",
+    price: "$39.900",
+    period: "/ mes",
+    perMonth: "$39.900",
+    savings: null,
+    popular: false,
+    features: ["Análisis IA ilimitados", "Gestión de bankroll", "Historial completo"],
+  },
+  {
+    id: "trimestral",
+    label: "Trimestral",
+    price: "$99.900",
+    period: "/ 3 meses",
+    perMonth: "$33.300/mes",
+    savings: 17,
+    popular: true,
+    features: ["Análisis IA ilimitados", "Gestión de bankroll", "Historial completo", "Soporte prioritario"],
+  },
+  {
+    id: "semestral",
+    label: "Semestral",
+    price: "$179.900",
+    period: "/ 6 meses",
+    perMonth: "$29.983/mes",
+    savings: 25,
+    popular: false,
+    features: ["Análisis IA ilimitados", "Gestión de bankroll", "Historial completo", "Soporte prioritario"],
+  },
+  {
+    id: "anual",
+    label: "Anual",
+    price: "$299.900",
+    period: "/ año",
+    perMonth: "$24.992/mes",
+    savings: 37,
+    popular: false,
+    features: ["Análisis IA ilimitados", "Gestión de bankroll", "Historial completo", "Soporte prioritario", "Acceso anticipado a nuevas funciones"],
+  },
+];
+
+// ---------------------------------------------------------------------------
 // Subscription status
 // ---------------------------------------------------------------------------
 
 function SubscriptionStatus({
   active,
   expiresAt,
+  plan,
 }: {
   active?: boolean;
   expiresAt: string | null;
+  plan?: string;
 }) {
   if (active === undefined) {
     return <div className="h-8 w-40 bg-secondary/50 rounded animate-pulse" />;
   }
 
+  const planLabel = PLANS.find(p => p.id === plan)?.label;
+
   return (
-    <div className="flex items-center gap-4">
+    <div className="flex flex-wrap items-center gap-3">
       <span
-        className={`px-4 py-1.5 rounded-full text-sm font-semibold border ${
+        className={`px-4 py-1.5 rounded-full text-sm font-semibold border flex items-center gap-1.5 ${
           active
             ? "bg-primary/10 text-primary border-primary/30"
             : "bg-destructive/10 text-destructive border-destructive/30"
         }`}
       >
-        {active ? "✓ Activa" : "✗ Sin suscripción"}
+        {active ? (
+          <><Crown className="w-3.5 h-3.5" /> {planLabel ?? "Activa"}</>
+        ) : (
+          "✗ Sin suscripción"
+        )}
       </span>
       {active && expiresAt && (
-        <span className="text-xs text-muted-foreground">
-          Válida hasta {new Date(expiresAt).toLocaleDateString("es-ES")}
+        <span className="text-xs text-muted-foreground bg-secondary/50 px-3 py-1.5 rounded-full border border-border">
+          Vence el {new Date(expiresAt).toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })}
         </span>
       )}
       {!active && (
         <span className="text-xs text-muted-foreground">
-          Contacta con el administrador para activar tu acceso.
+          Elige un plan a continuación para activar tu acceso.
         </span>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Pricing cards
+// ---------------------------------------------------------------------------
+
+function PricingCards({
+  active,
+  currentPlan,
+  expiresAt,
+}: {
+  active?: boolean;
+  currentPlan?: string;
+  expiresAt: string | null;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <TrendingDown className="w-4 h-4 text-primary" />
+        <span className="text-sm font-semibold">Planes disponibles</span>
+        <span className="text-xs text-muted-foreground">(COP · pago único por período)</span>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        {PLANS.map(plan => {
+          const isCurrent = active && currentPlan === plan.id;
+          return (
+            <div
+              key={plan.id}
+              className={`relative rounded-xl border p-5 flex flex-col gap-3 transition-all ${
+                isCurrent
+                  ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                  : plan.popular && !active
+                  ? "border-primary/50 bg-primary/5"
+                  : "border-border bg-secondary/20 hover:border-primary/30"
+              }`}
+            >
+              {/* Badges */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {isCurrent && (
+                  <span className="px-2 py-0.5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full">
+                    PLAN ACTUAL
+                  </span>
+                )}
+                {plan.popular && !isCurrent && (
+                  <span className="px-2 py-0.5 bg-primary/20 text-primary text-[10px] font-bold rounded-full border border-primary/30">
+                    MÁS POPULAR
+                  </span>
+                )}
+                {plan.savings && !isCurrent && (
+                  <span className="px-2 py-0.5 bg-emerald-500/15 text-emerald-400 text-[10px] font-bold rounded-full border border-emerald-500/25">
+                    Ahorra {plan.savings}%
+                  </span>
+                )}
+              </div>
+
+              {/* Plan name + price */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">{plan.label}</p>
+                <p className="text-2xl font-black text-foreground">{plan.price}</p>
+                <p className="text-xs text-muted-foreground">{plan.period}</p>
+                {plan.savings && (
+                  <p className="text-xs text-primary/70 mt-0.5">{plan.perMonth}</p>
+                )}
+              </div>
+
+              {/* Expiry for active plan */}
+              {isCurrent && expiresAt && (
+                <div className="text-xs text-muted-foreground bg-secondary/50 rounded-md px-2.5 py-1.5 border border-border">
+                  Vence {new Date(expiresAt).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })}
+                </div>
+              )}
+
+              {/* Features */}
+              <ul className="space-y-1.5 mt-1">
+                {plan.features.map(f => (
+                  <li key={f} className="flex items-start gap-2 text-xs text-muted-foreground">
+                    <Check className="w-3 h-3 text-primary shrink-0 mt-0.5" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="text-xs text-muted-foreground pt-1">
+        Para activar o cambiar tu plan, contacta al administrador.
+      </p>
     </div>
   );
 }
