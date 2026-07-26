@@ -54,12 +54,14 @@ A full-stack football betting management and prediction app powered by Gemini AI
 
 ## Setup status
 
-Project is set up to run on Replit:
-- Dependencies installed from the checked-in lockfile via `pnpm install --recursive --frozen-lockfile`
-- Managed workflows configured for the frontend, API server, and mockup sandbox
-- PostgreSQL `DATABASE_URL` and `SESSION_SECRET` are available in the environment
-- Clerk authentication is intentionally deferred until valid matching external Clerk keys are configured
-- The public landing page remains available while Clerk is not configured; authenticated routes require Clerk keys
+Project is fully set up to run on Replit:
+- Dependencies installed from the checked-in lockfile via `pnpm install --frozen-lockfile` (also runs automatically on `scripts/post-merge.sh`)
+- Managed workflows configured for the frontend (`artifacts/football-bets: web`), API server (`artifacts/api-server: API Server`), and mockup sandbox
+- PostgreSQL provisioned via Replit's built-in database; `DATABASE_URL` is runtime-managed and auto-injected
+- DB schema pushed via `pnpm --filter @workspace/db run push` (also runs automatically on `scripts/post-merge.sh`)
+- Clerk authentication provisioned via Replit-managed Clerk; `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`, and `VITE_CLERK_PUBLISHABLE_KEY` are set as secrets
+- `SESSION_SECRET` is available in the environment (used as fallback `ENCRYPTION_KEY` for Gemini API key encryption)
+- **Still needed:** `RAPIDAPI_KEY` — add as a Replit Secret to enable live football fixture fetching (sign up at https://rapidapi.com/api-sports/api/api-football, 100 req/day free tier)
 
 ## User preferences
 
