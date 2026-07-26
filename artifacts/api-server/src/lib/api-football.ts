@@ -2,6 +2,9 @@ import { logger } from "./logger";
 import { db, radarCacheTable, analysisCacheTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 
+/** How long (ms) to keep a cached result that contained live matches before refreshing. */
+const LIVE_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
+
 // Direct API-Sports endpoint — supports both x-apisports-key and x-rapidapi-* headers.
 // No trailing slash; append paths directly (e.g. `${API_FOOTBALL_BASE}/fixtures`).
 const API_FOOTBALL_BASE = "https://v3.football.api-sports.io";
@@ -174,8 +177,15 @@ async function fetchAllFixturesForDate(date: string): Promise<any[]> {
 
 /**
  * Fetch today's fixtures from API-Football using ONE API call for all leagues.
- * The full day's fixture list is cached in radar_cache under ALL_FIXTURES_CACHE_KEY.
- * Live matches bypass the cache so scores stay fresh.
+ *
+ * Cache strategy (radar_cache, key = ALL_FIXTURES_CACHE_KEY):
+ *  - If a valid cache entry exists → return from DB, no API call.
+ *  - A cache entry is valid when:
+ *      · it contained NO live matches → valid for the rest of the calendar day (UTC).
+ *      · it contained live matches   → valid for LIVE_CACHE_TTL_MS (2 min), then refresh.
+ *  - After every API fetch the cache is upserted (delete + insert) so createdAt is fresh.
+ *  - This ensures the first user to open the radar each day pays the one API request;
+ *    every subsequent user reads from the DB for free.
  */
 export async function getMatchesFromApiFootball(
   leagues?: string[],
@@ -187,7 +197,7 @@ export async function getMatchesFromApiFootball(
       .filter(Boolean),
   );
 
-  // 1. Try cache (single row covers all leagues for today)
+  // 1. Check for a cache entry for today
   const cached = await db
     .select()
     .from(radarCacheTable)
@@ -199,13 +209,26 @@ export async function getMatchesFromApiFootball(
     )
     .limit(1);
 
-  let allFixtures: ApiFootballMatch[];
+  let allFixtures: ApiFootballMatch[] | null = null;
 
   if (cached.length > 0) {
-    logger.info({ date }, "Radar cache hit (API-Football all-fixtures)");
-    allFixtures = JSON.parse(cached[0].result) as ApiFootballMatch[];
-  } else {
-    // 2. One API call — all leagues for today
+    const cachedFixtures = JSON.parse(cached[0].result) as ApiFootballMatch[];
+    const hadLive = cachedFixtures.some(
+      (m) => m.status === "live" || m.status === "halftime",
+    );
+    const ageMs = Date.now() - new Date(cached[0].createdAt).getTime();
+    const isValid = !hadLive || ageMs < LIVE_CACHE_TTL_MS;
+
+    if (isValid) {
+      logger.info({ date, hadLive, ageMs }, "Radar cache hit — serving from DB");
+      allFixtures = cachedFixtures;
+    } else {
+      logger.info({ date, ageMs }, "Radar cache stale (live TTL expired) — refreshing");
+    }
+  }
+
+  if (allFixtures === null) {
+    // 2. Fetch from API (one request covers all leagues for the day)
     try {
       const raw = await fetchAllFixturesForDate(date);
       allFixtures = raw
@@ -218,30 +241,38 @@ export async function getMatchesFromApiFootball(
           return { ...parseFixture(f, leagueName), hasAnalysis: false };
         });
 
-      logger.info(
-        { date, total: allFixtures.length },
-        "API-Football all-fixtures fetched",
-      );
-
-      // 3. Cache only if no live matches (live scores change every minute)
       const hasLive = allFixtures.some(
         (m) => m.status === "live" || m.status === "halftime",
       );
-      if (!hasLive) {
-        await db
-          .insert(radarCacheTable)
-          .values({
-            date,
-            league: ALL_FIXTURES_CACHE_KEY,
-            result: JSON.stringify(allFixtures),
-          })
-          .catch((err) =>
-            logger.warn({ err }, "Failed to cache all-fixtures result"),
-          );
-      }
+      logger.info(
+        { date, total: allFixtures.length, hasLive },
+        "API-Football fixtures fetched — caching in DB",
+      );
+
+      // 3. Upsert cache: delete any stale row, then insert fresh one
+      //    Always cache — even with live matches — so subsequent users hit the DB.
+      //    The TTL logic above handles freshness for live data.
+      await db
+        .delete(radarCacheTable)
+        .where(
+          and(
+            eq(radarCacheTable.date, date),
+            eq(radarCacheTable.league, ALL_FIXTURES_CACHE_KEY),
+          ),
+        )
+        .catch((err) => logger.warn({ err }, "Failed to clear stale cache row"));
+
+      await db
+        .insert(radarCacheTable)
+        .values({
+          date,
+          league: ALL_FIXTURES_CACHE_KEY,
+          result: JSON.stringify(allFixtures),
+        })
+        .catch((err) => logger.warn({ err }, "Failed to write cache row"));
     } catch (err) {
-      logger.error({ err }, "API-Football all-fixtures fetch failed");
-      throw err; // propagate so the route returns a 502
+      logger.error({ err }, "API-Football fetch failed");
+      throw err;
     }
   }
 
