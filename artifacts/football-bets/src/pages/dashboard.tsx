@@ -12,11 +12,25 @@ import {
   Match,
   Prediction
 } from "@workspace/api-client-react";
+import { useMutation } from "@tanstack/react-query";
 import { Radar, AlertTriangle, ChevronDown, Check, Loader2, Target, Info, Trophy, Clock, RefreshCw, Activity, Crown, Zap, X } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import * as Dialog from "@radix-ui/react-dialog";
+
+// ---------------------------------------------------------------------------
+// Basketball types
+// ---------------------------------------------------------------------------
+interface BasketballMatch {
+  id: string;
+  apiId: number;
+  homeTeam: string;
+  awayTeam: string;
+  kickoffTime: string;
+  status: string;
+  score: { home: number | null; away: number | null } | null;
+}
 
 const LIGAS = [
   { id: "premier_league",   label: "Premier League",   flag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿" },
@@ -182,6 +196,35 @@ export default function Dashboard() {
   const [persistedResults, setPersistedResults] = useState<typeof radarMutation.data>(() => readLS("rb_radar", undefined));
   const radarRequestLockedRef = useRef(false);
 
+  // Basketball radar state
+  const nbaRadarMutation = useMutation({
+    mutationFn: async (): Promise<BasketballMatch[]> => {
+      const res = await fetch("/api/basketball/radar", { method: "POST", headers: { "Content-Type": "application/json" } });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const err: any = new Error(data?.error ?? `HTTP ${res.status}`);
+        err.status = res.status;
+        err.data = data;
+        throw err;
+      }
+      return res.json();
+    },
+  });
+  const [persistedNbaResults, setPersistedNbaResults] = useState<BasketballMatch[] | undefined>(() => readLS("rb_nba_radar", undefined));
+  const nbaRadarLockedRef = useRef(false);
+
+  const handleNbaRadarScan = useCallback(() => {
+    if (nbaRadarLockedRef.current || nbaRadarMutation.isPending) return;
+    nbaRadarLockedRef.current = true;
+    nbaRadarMutation.mutate(undefined, {
+      onSuccess: (data) => {
+        setPersistedNbaResults(data);
+        try { localStorage.setItem("rb_nba_radar", JSON.stringify(data)); } catch {}
+      },
+      onSettled: () => { nbaRadarLockedRef.current = false; },
+    });
+  }, [nbaRadarMutation]);
+
   useEffect(() => {
     try { localStorage.setItem("rb_leagues", JSON.stringify(selectedLeagues)); } catch {}
   }, [selectedLeagues]);
@@ -282,13 +325,95 @@ export default function Dashboard() {
       </div>
 
       {sport === "baloncesto" && (
-        <div className="flex flex-col items-center justify-center min-h-[400px] rounded-xl border border-border bg-card text-center gap-4">
-          <span className="text-5xl">🏀</span>
-          <h2 className="text-xl font-semibold">Baloncesto — Próximamente</h2>
-          <p className="text-muted-foreground text-sm max-w-sm">
-            Aquí irá el módulo de análisis de baloncesto. En cuanto tengas la API y la llave lista, lo configuramos.
-          </p>
-        </div>
+        <>
+          {/* Radar NBA */}
+          <div className="relative rounded-xl border border-border bg-card overflow-hidden">
+            <div className="p-8 flex flex-col items-center justify-center min-h-[260px] text-center relative z-20">
+              <button
+                onClick={handleNbaRadarScan}
+                disabled={nbaRadarMutation.isPending}
+                className={`relative group flex flex-col items-center justify-center w-40 h-40 rounded-full transition-all duration-500 ${
+                  nbaRadarMutation.isPending
+                    ? "bg-primary/20 scale-105"
+                    : "bg-primary/10 hover:bg-primary/20 hover:scale-105 cursor-pointer border border-primary/30"
+                }`}
+              >
+                {nbaRadarMutation.isPending && <div className="radar-sweep" />}
+                <Radar className={`w-12 h-12 mb-2 ${nbaRadarMutation.isPending ? "text-primary animate-pulse" : "text-primary group-hover:text-primary"}`} />
+                <span className="font-bold tracking-widest uppercase text-xs text-primary">
+                  {nbaRadarMutation.isPending ? "Buscando..." : "Desplegar Radar"}
+                </span>
+              </button>
+              <p className="mt-4 text-xs text-muted-foreground">NBA · Partidos de hoy</p>
+              {!isActive && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Modo freemium · 1 análisis gratuito por día
+                </p>
+              )}
+            </div>
+            <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none z-10" />
+          </div>
+
+          {/* Error state */}
+          {nbaRadarMutation.isError && (() => {
+            const errData = (nbaRadarMutation.error as any)?.data as { error?: string; code?: string } | undefined;
+            const isFreemiumBlocked = errData?.code === "FREEMIUM_DISABLED";
+            const errorMsg = errData?.error ?? (nbaRadarMutation.error as Error)?.message ?? "Error inesperado.";
+            if (isFreemiumBlocked) {
+              return (
+                <div className="bg-card border border-primary/30 p-4 rounded-md flex items-start gap-3">
+                  <Crown className="w-5 h-5 shrink-0 mt-0.5 text-primary" />
+                  <div className="text-sm flex-1">
+                    <p className="font-semibold mb-1 text-foreground">Acceso gratuito desactivado</p>
+                    <p className="text-muted-foreground mb-3">{errorMsg}</p>
+                    <button onClick={() => setConversionModalOpen(true)} className="flex items-center gap-2 px-4 py-1.5 bg-primary text-primary-foreground rounded text-xs font-semibold hover:bg-primary/90 transition-colors">
+                      <Zap className="w-3.5 h-3.5" /> Ver planes
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-4 rounded-md flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-semibold mb-1">Error al desplegar el radar</p>
+                  <p>{errorMsg}</p>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Results */}
+          {(() => {
+            const results = nbaRadarMutation.data ?? persistedNbaResults;
+            if (!results) return null;
+            const isStale = !nbaRadarMutation.isSuccess && !!persistedNbaResults;
+            return (
+              <div className="space-y-4 animate-in slide-in-from-bottom-8 duration-700">
+                <div className="flex items-center gap-2 border-b border-border pb-2 flex-wrap">
+                  <Target className="w-5 h-5 text-primary" />
+                  <h2 className="text-xl font-semibold">Partidos NBA Detectados</h2>
+                  <Badge className="ml-2">{results.length} Partido{results.length !== 1 ? "s" : ""}</Badge>
+                  {isStale && (
+                    <span className="ml-auto text-xs text-muted-foreground flex items-center gap-1">
+                      <RefreshCw className="w-3 h-3" /> Última búsqueda guardada — presiona Radar para actualizar
+                    </span>
+                  )}
+                </div>
+                {results.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-12 bg-card rounded-md border border-border">
+                    No hay partidos NBA programados para hoy.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                    {results.map(match => <NbaMatchCard key={match.id} match={match} />)}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </>
       )}
 
       {sport === "futbol" && (
@@ -542,6 +667,59 @@ function SubscriptionConversionModal({
     </Dialog.Root>
   );
 }
+
+/* ─── NBA Match Card ─────────────────────────────────────────────────────── */
+
+function NbaMatchCard({ match }: { match: BasketballMatch }) {
+  const showScore = match.score && (match.status === "live" || match.status === "halftime" || match.status === "finished");
+
+  return (
+    <div className="bg-card border border-border rounded-lg overflow-hidden flex flex-col transition-all duration-300 hover:border-primary/50">
+      <div className="p-4 flex items-center justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          {/* Status + time row */}
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            {match.status === "scheduled" && (
+              <span className="text-xs font-medium text-primary px-2 py-0.5 bg-primary/10 rounded-sm">
+                {match.kickoffTime
+                  ? (() => { const d = new Date(match.kickoffTime); return isNaN(d.getTime()) ? match.kickoffTime : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); })()
+                  : "—"}
+              </span>
+            )}
+            {match.status === "live" && <Badge variant="live"><span className="flex items-center gap-1"><Activity className="w-2.5 h-2.5" />En Vivo</span></Badge>}
+            {match.status === "halftime" && <Badge variant="warning">Descanso</Badge>}
+            {match.status === "finished" && <Badge variant="outline">Finalizado</Badge>}
+            {match.status === "postponed" && <Badge variant="secondary">Pospuesto</Badge>}
+            {match.status === "cancelled" && <Badge variant="danger">Cancelado</Badge>}
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-sm bg-primary/10 text-primary border border-primary/20">NBA</span>
+          </div>
+
+          {/* Teams + score */}
+          {showScore ? (
+            <div className="flex items-center gap-3 mt-1">
+              <div className="flex-1 min-w-0">
+                <p className="text-base font-bold text-foreground truncate">{match.homeTeam}</p>
+                <p className="text-base font-bold text-foreground truncate">{match.awayTeam}</p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-xl font-black text-primary tabular-nums">{match.score?.home ?? "—"}</p>
+                <p className="text-xl font-black text-primary tabular-nums">{match.score?.away ?? "—"}</p>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-1 space-y-0.5">
+              <p className="text-base font-bold text-foreground truncate">{match.homeTeam}</p>
+              <p className="text-xs text-muted-foreground font-medium">vs</p>
+              <p className="text-base font-bold text-foreground truncate">{match.awayTeam}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Football Match Card ────────────────────────────────────────────────── */
 
 function MatchCard({ match, leagueName, onAnalysisSuccess, onFreemiumBlocked }: { match: Match, leagueName: string, onAnalysisSuccess: (homeTeam: string, awayTeam: string) => void, onFreemiumBlocked: () => void }) {
   const [analysisModalOpen, setAnalysisModalOpen] = useState(false);

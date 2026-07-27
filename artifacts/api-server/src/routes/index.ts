@@ -3,6 +3,7 @@ import usersRouter from "./users";
 import matchesRouter from "./matches";
 import betsRouter from "./bets";
 import adminRouter from "./admin";
+import basketballRouter from "./basketball";
 
 const router: IRouter = Router();
 
@@ -10,5 +11,6 @@ router.use(usersRouter);
 router.use(matchesRouter);
 router.use(betsRouter);
 router.use(adminRouter);
+router.use(basketballRouter);
 
 export default router;
