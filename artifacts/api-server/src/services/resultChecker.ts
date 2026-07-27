@@ -2,10 +2,17 @@
  * Servicio de verificación de resultados de apuestas.
  *
  * Hace UNA petición a API-Football por cada fecha con apuestas pendientes,
- * luego evalúa y liquida las apuestas sin consumir tokens de IA.
+ * y peticiones adicionales a /fixtures/statistics solo para los partidos
+ * que tengan apuestas de córners o tarjetas (bajo demanda, con caché).
  *
- * Soporta lookback de hasta 7 días para recuperar apuestas no resueltas
- * por fallos previos del cron o partidos con kickoff en días anteriores.
+ * Mercados soportados:
+ *   • 1X2 / Resultado Final
+ *   • Más/Menos Goles (Over/Under)
+ *   • BTTS / Ambos Anotan
+ *   • Hándicap Asiático
+ *   • Hándicap Europeo
+ *   • Córners (Over/Under total, Hándicap por equipo)
+ *   • Tarjetas (Over/Under total, amarillas por equipo, tarjeta roja sí/no)
  */
 
 import { logger } from "../lib/logger";
@@ -17,11 +24,27 @@ import { eq } from "drizzle-orm";
 // Tipos internos
 // ---------------------------------------------------------------------------
 
+interface FixtureStats {
+  homeCorners: number;
+  awayCorners: number;
+  totalCorners: number;
+  homeYellowCards: number;
+  awayYellowCards: number;
+  homeRedCards: number;
+  awayRedCards: number;
+  /** Todas las amarillas + rojas de ambos equipos */
+  totalCards: number;
+}
+
 interface FixtureResult {
+  /** ID de API-Football — necesario para pedir estadísticas */
+  fixtureId?: number;
   homeScore: number;
   awayScore: number;
   /** FT | AET | PEN | AWD | WO | CANC | ABD | PST */
   statusShort: string;
+  /** Se carga bajo demanda para mercados de córners/tarjetas */
+  stats?: FixtureStats;
 }
 
 // Clave por nombre: "<homeTeam_lower>|<awayTeam_lower>"
@@ -37,22 +60,16 @@ function normalize(name: string): string {
   return name.toLowerCase().trim();
 }
 
-/**
- * Extrae la fecha UTC (YYYY-MM-DD) del kickoffTime de una apuesta.
- * Acepta ISO strings con y sin offset de timezone.
- */
+/** Extrae la fecha UTC (YYYY-MM-DD) del kickoffTime de una apuesta. */
 function kickoffDateUTC(kickoffTime: string): string {
   try {
     return new Date(kickoffTime).toISOString().split("T")[0];
   } catch {
-    // Fallback: tomar los primeros 10 caracteres si el parse falla
     return kickoffTime.slice(0, 10);
   }
 }
 
-/**
- * Comprueba si el kickoff ya ha ocurrido (la hora de inicio ya pasó).
- */
+/** Comprueba si el kickoff ya ha ocurrido. */
 function hasKickoffPassed(kickoffTime: string): boolean {
   try {
     return new Date(kickoffTime) <= new Date();
@@ -61,8 +78,22 @@ function hasKickoffPassed(kickoffTime: string): boolean {
   }
 }
 
+/** Indica si el mercado de una apuesta necesita estadísticas adicionales. */
+function requiresStats(market: string): boolean {
+  const m = market.toLowerCase();
+  return (
+    m.includes("córner") ||
+    m.includes("corner") ||
+    m.includes("esquina") ||
+    m.includes("tarjeta") ||
+    m.includes("card") ||
+    m.includes("amarilla") ||
+    m.includes("roja")
+  );
+}
+
 // ---------------------------------------------------------------------------
-// Petición a API-Football (una llamada por fecha)
+// Claves API-Football
 // ---------------------------------------------------------------------------
 
 function getApiFootballKeys(): string[] {
@@ -72,6 +103,10 @@ function getApiFootballKeys(): string[] {
     process.env["FOOTBALL_API_KEY"],
   ].filter((k): k is string => Boolean(k));
 }
+
+// ---------------------------------------------------------------------------
+// Petición principal: partidos finalizados por fecha
+// ---------------------------------------------------------------------------
 
 interface FinishedFixtures {
   byName: FixtureMap;
@@ -84,13 +119,11 @@ async function fetchFinishedFixtures(date: string): Promise<FinishedFixtures> {
     throw new Error("No API-Football keys configuradas (API_FOOTBALL_KEY_1 / FOOTBALL_API_KEY)");
   }
 
-  // Pedir todos los partidos terminados (o en juego) del día para no perder
-  // partidos aún en curso que podrían terminar pronto.
   const url = new URL("https://v3.football.api-sports.io/fixtures");
   url.searchParams.set("date", date);
   url.searchParams.set("status", "FT-AET-PEN-AWD-WO");
 
-  logger.info({ date, url: url.pathname }, "Fetching finished fixtures from API-Football");
+  logger.info({ date }, "Fetching finished fixtures from API-Football");
 
   const data = await fetchConRotacion(url, keys, {
     type: "header",
@@ -99,7 +132,6 @@ async function fetchFinishedFixtures(date: string): Promise<FinishedFixtures> {
   });
 
   const fixtures: any[] = Array.isArray(data?.response) ? data.response : [];
-
   logger.info({ date, count: fixtures.length }, "Finished fixtures received");
 
   const byName: FixtureMap = new Map();
@@ -110,25 +142,103 @@ async function fetchFinishedFixtures(date: string): Promise<FinishedFixtures> {
     const awayName = normalize(f.teams?.away?.name ?? "");
     if (!homeName || !awayName) continue;
 
+    const fixtureId: number | undefined = f.fixture?.id;
+
     const result: FixtureResult = {
+      fixtureId,
       homeScore: f.goals?.home ?? 0,
       awayScore: f.goals?.away ?? 0,
       statusShort: f.fixture?.status?.short ?? "FT",
     };
 
     byName.set(`${homeName}|${awayName}`, result);
-
-    const fixtureId: number | undefined = f.fixture?.id;
     if (fixtureId) byId.set(fixtureId, result);
   }
 
   return { byName, byId };
 }
 
-/**
- * Busca el resultado de un partido en el mapa. Intenta primero coincidencia
- * exacta; si falla, intenta coincidencia parcial.
- */
+// ---------------------------------------------------------------------------
+// Petición secundaria: estadísticas por partido (córners, tarjetas)
+// Bajo demanda; el resultado se cachea en el objeto FixtureResult.
+// ---------------------------------------------------------------------------
+
+/** Caché en memoria para la duración de una ejecución de verificación. */
+const statsCache = new Map<number, FixtureStats | null>();
+
+function getStat(teamStats: any[], type: string): number {
+  const stat = teamStats.find((s: any) => s.type === type);
+  const val = stat?.value;
+  // API-Football a veces devuelve null o string "0"
+  if (val === null || val === undefined) return 0;
+  return typeof val === "number" ? val : parseInt(String(val), 10) || 0;
+}
+
+async function loadFixtureStats(
+  fixture: FixtureResult,
+  keys: string[],
+): Promise<FixtureStats | null> {
+  if (!fixture.fixtureId) return null;
+  if (fixture.stats) return fixture.stats;
+
+  const cached = statsCache.get(fixture.fixtureId);
+  if (cached !== undefined) return cached;
+
+  const url = new URL("https://v3.football.api-sports.io/fixtures/statistics");
+  url.searchParams.set("fixture", String(fixture.fixtureId));
+
+  logger.info({ fixtureId: fixture.fixtureId }, "Fetching fixture statistics");
+
+  try {
+    const data = await fetchConRotacion(url, keys, {
+      type: "header",
+      name: "x-rapidapi-key",
+      extraHeaders: { "x-rapidapi-host": "v3.football.api-sports.io" },
+    });
+
+    const response: any[] = Array.isArray(data?.response) ? data.response : [];
+    if (response.length < 2) {
+      logger.warn({ fixtureId: fixture.fixtureId }, "Estadísticas incompletas o no disponibles");
+      statsCache.set(fixture.fixtureId, null);
+      return null;
+    }
+
+    const homeStats: any[] = response[0]?.statistics ?? [];
+    const awayStats: any[] = response[1]?.statistics ?? [];
+
+    const homeYellow = getStat(homeStats, "Yellow Cards");
+    const awayYellow = getStat(awayStats, "Yellow Cards");
+    const homeRed = getStat(homeStats, "Red Cards");
+    const awayRed = getStat(awayStats, "Red Cards");
+    const homeCorners = getStat(homeStats, "Corner Kicks");
+    const awayCorners = getStat(awayStats, "Corner Kicks");
+
+    const stats: FixtureStats = {
+      homeCorners,
+      awayCorners,
+      totalCorners: homeCorners + awayCorners,
+      homeYellowCards: homeYellow,
+      awayYellowCards: awayYellow,
+      homeRedCards: homeRed,
+      awayRedCards: awayRed,
+      totalCards: homeYellow + awayYellow + homeRed + awayRed,
+    };
+
+    fixture.stats = stats;
+    statsCache.set(fixture.fixtureId, stats);
+    logger.info({ fixtureId: fixture.fixtureId, stats }, "Estadísticas cargadas");
+    return stats;
+  } catch (err) {
+    logger.error({ err, fixtureId: fixture.fixtureId }, "Error al obtener estadísticas del partido");
+    statsCache.set(fixture.fixtureId, null);
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Búsqueda fuzzy por nombre de equipo
+// ---------------------------------------------------------------------------
+
 function findFixture(
   map: FixtureMap,
   homeBet: string,
@@ -138,10 +248,8 @@ function findFixture(
   const awayKey = normalize(awayBet);
   const exactKey = `${homeKey}|${awayKey}`;
 
-  // 1. Exact match
   if (map.has(exactKey)) return map.get(exactKey);
 
-  // 2. Partial match — iterate entries.
   for (const [key, result] of map.entries()) {
     const [fHome, fAway] = key.split("|");
 
@@ -164,7 +272,7 @@ function findFixture(
 }
 
 // ---------------------------------------------------------------------------
-// Lógica de evaluación de apuestas (pura JS, sin IA)
+// Evaluación de apuestas
 // ---------------------------------------------------------------------------
 
 type BetOutcome = "won" | "lost" | "void";
@@ -174,33 +282,122 @@ function evaluateBet(
   selection: string,
   homeScore: number,
   awayScore: number,
+  stats?: FixtureStats,
 ): BetOutcome {
   const m = market.toLowerCase();
   const s = selection.toLowerCase().trim();
   const totalGoals = homeScore + awayScore;
 
-  // ------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   // 1X2 / Resultado Final
-  // ------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   if (m.includes("1x2") || m.includes("resultado") || m.includes("match result")) {
     if (homeScore > awayScore) {
-      return s === "1" || s === "local" || s === "home" ? "won" : "lost";
+      return s === "1" || s === "local" || s === "home" || s === "victoria local" ? "won" : "lost";
     } else if (homeScore === awayScore) {
       return s === "x" || s === "empate" || s === "draw" ? "won" : "lost";
     } else {
-      return s === "2" || s === "visitante" || s === "away" ? "won" : "lost";
+      return s === "2" || s === "visitante" || s === "away" || s === "victoria visitante" ? "won" : "lost";
     }
   }
 
-  // ------------------------------------------------------------------
+  // -------------------------------------------------------------------------
+  // Córners
+  // -------------------------------------------------------------------------
+  if (m.includes("córner") || m.includes("corner") || m.includes("esquina")) {
+    if (!stats) {
+      logger.warn({ market, selection }, "Apuesta de córners sin estadísticas disponibles → void");
+      return "void";
+    }
+
+    const isHome = s.includes("local") || s.includes("home");
+    const isAway = s.includes("visitante") || s.includes("away");
+
+    // Hándicap por equipo: "Local +5.5 córners" / "Visitante -4.5 córners"
+    if (isHome || isAway) {
+      const handicapMatch = s.match(/([+-]?\d+(?:\.\d+)?)/);
+      if (!handicapMatch) return "void";
+      const handicap = parseFloat(handicapMatch[1]);
+      const teamCorners = isHome ? stats.homeCorners : stats.awayCorners;
+      const oppCorners = isHome ? stats.awayCorners : stats.homeCorners;
+      const adjusted = teamCorners + handicap;
+      if (adjusted > oppCorners) return "won";
+      if (adjusted < oppCorners) return "lost";
+      return "void"; // empate exacto = push
+    }
+
+    // Over/Under total córners: "Más de 9.5 córners" / "Menos de 8.5"
+    const lineMatch = s.match(/(\d+(?:\.\d+)?)/);
+    if (!lineMatch) return "void";
+    const line = parseFloat(lineMatch[1]);
+    const isOver = s.includes("más") || s.includes("over") || s.startsWith("+");
+    return isOver
+      ? stats.totalCorners > line ? "won" : "lost"
+      : stats.totalCorners < line ? "won" : "lost";
+  }
+
+  // -------------------------------------------------------------------------
+  // Tarjetas
+  // -------------------------------------------------------------------------
+  if (
+    m.includes("tarjeta") ||
+    m.includes("card") ||
+    m.includes("amarilla") ||
+    m.includes("booking")
+  ) {
+    if (!stats) {
+      logger.warn({ market, selection }, "Apuesta de tarjetas sin estadísticas disponibles → void");
+      return "void";
+    }
+
+    // Tarjeta roja sí/no
+    if (s.includes("roja") || s.includes("red card")) {
+      const totalRed = stats.homeRedCards + stats.awayRedCards;
+      if (s.includes("sí") || s.includes("si") || s.includes("yes")) {
+        return totalRed > 0 ? "won" : "lost";
+      }
+      if (s.includes("no")) {
+        return totalRed === 0 ? "won" : "lost";
+      }
+      return "void";
+    }
+
+    const lineMatch = s.match(/(\d+(?:\.\d+)?)/);
+    if (!lineMatch) return "void";
+    const line = parseFloat(lineMatch[1]);
+    const isOver = s.includes("más") || s.includes("over") || s.startsWith("+");
+
+    const isHome = s.includes("local") || s.includes("home");
+    const isAway = s.includes("visitante") || s.includes("away");
+
+    // Tarjetas amarillas de un equipo específico
+    if ((s.includes("amarilla") || s.includes("yellow")) && (isHome || isAway)) {
+      const yellows = isHome ? stats.homeYellowCards : stats.awayYellowCards;
+      return isOver ? yellows > line ? "won" : "lost" : yellows < line ? "won" : "lost";
+    }
+
+    // Tarjetas amarillas totales
+    if (s.includes("amarilla") || s.includes("yellow")) {
+      const totalYellow = stats.homeYellowCards + stats.awayYellowCards;
+      return isOver ? totalYellow > line ? "won" : "lost" : totalYellow < line ? "won" : "lost";
+    }
+
+    // Total de tarjetas (amarillas + rojas) — mercado genérico
+    return isOver
+      ? stats.totalCards > line ? "won" : "lost"
+      : stats.totalCards < line ? "won" : "lost";
+  }
+
+  // -------------------------------------------------------------------------
   // Over / Under goles totales
-  // ------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   if (
     m.includes("over") ||
     m.includes("under") ||
     m.includes("más") ||
     m.includes("menos") ||
-    m.includes("total gol")
+    m.includes("total gol") ||
+    m.includes("goles")
   ) {
     const lineMatch = s.match(/(\d+(?:\.\d+)?)/);
     if (!lineMatch) return "void";
@@ -213,9 +410,9 @@ function evaluateBet(
     }
   }
 
-  // ------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   // BTTS / Ambos Anotan
-  // ------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   if (
     m.includes("btts") ||
     m.includes("ambos") ||
@@ -232,9 +429,9 @@ function evaluateBet(
     return "void";
   }
 
-  // ------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   // Hándicap Asiático
-  // ------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   if (m.includes("asiático") || m.includes("asiatico") || m.includes("asian")) {
     const lineMatch = s.match(/([+-]?\d+(?:\.\d+)?)\s*$/);
     if (!lineMatch) return "void";
@@ -249,10 +446,15 @@ function evaluateBet(
     return "void";
   }
 
-  // ------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   // Hándicap Europeo
-  // ------------------------------------------------------------------
-  if (m.includes("europeo") || m.includes("european") || m.includes("hándicap") || m.includes("handicap")) {
+  // -------------------------------------------------------------------------
+  if (
+    m.includes("europeo") ||
+    m.includes("european") ||
+    m.includes("hándicap") ||
+    m.includes("handicap")
+  ) {
     const lineMatch = s.match(/([+-]?\d+(?:\.\d+)?)\s*$/);
     if (!lineMatch) return "void";
     const handicap = parseFloat(lineMatch[1]);
@@ -267,10 +469,10 @@ function evaluateBet(
     return isHome ? "lost" : "won";
   }
 
-  // ------------------------------------------------------------------
-  // Mercado desconocido → marcar como void
-  // ------------------------------------------------------------------
-  logger.warn({ market, selection }, "Mercado desconocido, apuesta marcada como void");
+  // -------------------------------------------------------------------------
+  // Mercado desconocido
+  // -------------------------------------------------------------------------
+  logger.warn({ market, selection }, "Mercado no reconocido — apuesta marcada como void");
   return "void";
 }
 
@@ -282,6 +484,7 @@ export interface VerificationSummary {
   date: string;
   totalPending: number;
   fixturesFound: number;
+  statsFetched: number;
   resolved: number;
   won: number;
   lost: number;
@@ -289,21 +492,17 @@ export interface VerificationSummary {
   notMatched: number;
 }
 
-/**
- * Verifica y liquida todas las apuestas pendientes cuyos partidos ya
- * han comenzado, incluyendo apuestas de días anteriores (lookback 7 días).
- *
- * Agrupa las apuestas por fecha UTC de kickoff y hace una sola petición
- * a API-Football por cada fecha única.
- */
 export async function verificarResultadosDelDia(): Promise<VerificationSummary> {
   const now = new Date();
   const todayUTC = now.toISOString().split("T")[0];
+  const keys = getApiFootballKeys();
+
+  // Limpiar caché de estadísticas al inicio de cada ejecución
+  statsCache.clear();
 
   logger.info({ date: todayUTC }, "Iniciando verificación de resultados");
 
-  // 1. Obtener TODAS las apuestas pendientes cuyo kickoff ya ha pasado,
-  //    sin restricción de fecha (lookback implícito).
+  // 1. Todas las apuestas pendientes cuyo kickoff ya ha pasado (lookback automático)
   const allPending = await db
     .select()
     .from(betsTable)
@@ -320,6 +519,7 @@ export async function verificarResultadosDelDia(): Promise<VerificationSummary> 
     date: todayUTC,
     totalPending: overduePending.length,
     fixturesFound: 0,
+    statsFetched: 0,
     resolved: 0,
     won: 0,
     lost: 0,
@@ -332,8 +532,7 @@ export async function verificarResultadosDelDia(): Promise<VerificationSummary> 
     return summary;
   }
 
-  // 2. Agrupar apuestas por fecha UTC de kickoff para minimizar
-  //    llamadas a la API (una por fecha única).
+  // 2. Agrupar por fecha UTC de kickoff (una llamada a la API por fecha)
   const betsByDate = new Map<string, typeof overduePending>();
   for (const bet of overduePending) {
     const betDate = kickoffDateUTC(bet.kickoffTime);
@@ -341,10 +540,7 @@ export async function verificarResultadosDelDia(): Promise<VerificationSummary> 
     betsByDate.get(betDate)!.push(bet);
   }
 
-  logger.info(
-    { dates: [...betsByDate.keys()] },
-    "Fechas únicas de kickoff a verificar",
-  );
+  logger.info({ dates: [...betsByDate.keys()] }, "Fechas únicas de kickoff a verificar");
 
   // 3. Procesar cada fecha
   for (const [date, bets] of betsByDate.entries()) {
@@ -360,9 +556,9 @@ export async function verificarResultadosDelDia(): Promise<VerificationSummary> 
     summary.fixturesFound += fixtures.byName.size;
 
     for (const bet of bets) {
+      // Buscar el partido correspondiente (por ID exacto primero, luego por nombre)
       let fixture: FixtureResult | undefined;
 
-      // Priorizar búsqueda por ID exacto de API-Football
       if (bet.fixtureId) {
         fixture = fixtures.byId.get(bet.fixtureId);
         if (!fixture) {
@@ -386,7 +582,7 @@ export async function verificarResultadosDelDia(): Promise<VerificationSummary> 
         continue;
       }
 
-      // Partido cancelado / suspendido / aplazado → anular apuesta
+      // Partido cancelado / suspendido / aplazado → anular
       if (
         fixture.statusShort === "CANC" ||
         fixture.statusShort === "ABD" ||
@@ -401,12 +597,25 @@ export async function verificarResultadosDelDia(): Promise<VerificationSummary> 
         continue;
       }
 
+      // Cargar estadísticas si el mercado las necesita (córners / tarjetas)
+      let stats: FixtureStats | undefined;
+      if (requiresStats(bet.market)) {
+        const loaded = await loadFixtureStats(fixture, keys);
+        if (loaded) {
+          stats = loaded;
+          // Contar solo llamadas únicas reales (no caché)
+          if (!statsCache.has(fixture.fixtureId ?? -1)) summary.statsFetched++;
+        }
+      }
+
       const outcome = evaluateBet(
         bet.market,
         bet.selection,
         fixture.homeScore,
         fixture.awayScore,
+        stats,
       );
+
       const finalScore = `${fixture.homeScore}-${fixture.awayScore}`;
       const returnAmount =
         outcome === "won" ? parseFloat((bet.stake * bet.odds).toFixed(2)) : 0;
@@ -432,7 +641,7 @@ export async function verificarResultadosDelDia(): Promise<VerificationSummary> 
           selection: bet.selection,
           finalScore,
           outcome,
-          returnAmount: outcome === "won" ? returnAmount : 0,
+          ...(stats && { stats }),
         },
         "Apuesta resuelta",
       );
