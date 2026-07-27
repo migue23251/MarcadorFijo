@@ -203,7 +203,7 @@ export default function Dashboard() {
 
   // Basketball radar state
   const [selectedBasketballLeagues, setSelectedBasketballLeagues] = useState<("nba" | "euroleague")[]>(() =>
-    readLS<("nba" | "euroleague")[]>("rb_bball_leagues", ["nba"])
+    readLS<("nba" | "euroleague")[]>("rb_bball_leagues", [])
   );
   const nbaRadarMutation = useMutation({
     mutationFn: async (leagues: ("nba" | "euroleague")[]): Promise<BasketballMatch[]> => {
@@ -230,9 +230,8 @@ export default function Dashboard() {
   const toggleBasketballLeague = useCallback((id: "nba" | "euroleague") => {
     setSelectedBasketballLeagues(prev => {
       const next = prev.includes(id) ? prev.filter(l => l !== id) : [...prev, id];
-      const result = next.length === 0 ? [id] : next; // keep at least one
-      try { localStorage.setItem("rb_bball_leagues", JSON.stringify(result)); } catch {}
-      return result;
+      try { localStorage.setItem("rb_bball_leagues", JSON.stringify(next)); } catch {}
+      return next;
     });
     setPersistedNbaResults(undefined);
     nbaRadarMutation.reset();
@@ -241,7 +240,10 @@ export default function Dashboard() {
   const handleNbaRadarScan = useCallback(() => {
     if (nbaRadarLockedRef.current || nbaRadarMutation.isPending) return;
     nbaRadarLockedRef.current = true;
-    nbaRadarMutation.mutate(selectedBasketballLeagues, {
+    const leaguesToScan = selectedBasketballLeagues.length > 0
+      ? selectedBasketballLeagues
+      : (["nba", "euroleague"] as ("nba" | "euroleague")[]);
+    nbaRadarMutation.mutate(leaguesToScan, {
       onSuccess: (data) => {
         setPersistedNbaResults(data);
         try { localStorage.setItem("rb_bball_radar", JSON.stringify(data)); } catch {}
@@ -378,8 +380,8 @@ export default function Dashboard() {
               })}
             </div>
             <p className="text-xs text-muted-foreground">
-              {selectedBasketballLeagues.length === LIGAS_BALONCESTO.length
-                ? "El radar buscará en todas las ligas seleccionadas."
+              {selectedBasketballLeagues.length === 0
+                ? "Sin selección: el radar buscará en NBA y EuroLeague."
                 : `Escaneando: ${selectedBasketballLeagues.map(id => LIGAS_BALONCESTO.find(l => l.id === id)?.label).join(" + ")}.`}
             </p>
           </div>
