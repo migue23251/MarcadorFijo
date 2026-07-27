@@ -172,6 +172,7 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const [conversionModalOpen, setConversionModalOpen] = useState(false);
+  const [sport, setSport] = useState<"futbol" | "baloncesto">("futbol");
 
   const { data: me } = useGetMe({ query: { queryKey: getGetMeQueryKey() } });
 
@@ -255,6 +256,43 @@ export default function Dashboard() {
           )}
         </div>
       </header>
+
+      {/* Pestañas de deporte */}
+      <div className="flex gap-1 p-1 bg-secondary rounded-lg w-fit border border-border">
+        <button
+          onClick={() => setSport("futbol")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+            sport === "futbol"
+              ? "bg-card text-foreground shadow-sm border border-border"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          ⚽ Fútbol
+        </button>
+        <button
+          onClick={() => setSport("baloncesto")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+            sport === "baloncesto"
+              ? "bg-card text-foreground shadow-sm border border-border"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          🏀 Baloncesto
+        </button>
+      </div>
+
+      {sport === "baloncesto" && (
+        <div className="flex flex-col items-center justify-center min-h-[400px] rounded-xl border border-border bg-card text-center gap-4">
+          <span className="text-5xl">🏀</span>
+          <h2 className="text-xl font-semibold">Baloncesto — Próximamente</h2>
+          <p className="text-muted-foreground text-sm max-w-sm">
+            Aquí irá el módulo de análisis de baloncesto. En cuanto tengas la API y la llave lista, lo configuramos.
+          </p>
+        </div>
+      )}
+
+      {sport === "futbol" && (
+      <>
 
       {/* Selector de competiciones */}
       <div className="bg-card border border-border rounded-xl p-5 space-y-4">
@@ -403,6 +441,9 @@ export default function Dashboard() {
           </div>
         );
       })()}
+
+      </>
+      )}
 
       <SubscriptionConversionModal
         open={conversionModalOpen}
