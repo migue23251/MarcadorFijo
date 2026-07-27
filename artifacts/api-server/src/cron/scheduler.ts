@@ -27,15 +27,15 @@ export function initScheduler(): void {
     }
   }
 
-  // Verificación cada hora, entre las 12:00 y las 23:59 UTC
+  // Verificación cada 2 horas, entre las 12:00 y las 22:00 UTC
   // (cubre la mayoría de horarios de partidos europeos, americanos y asiáticos).
-  cron.schedule("0 12-23 * * *", () => runVerification("cron-hourly"));
+  cron.schedule("0 12,14,16,18,20,22 * * *", () => runVerification("cron-every-2h"));
 
   // Pasada nocturna de seguridad a las 00:30 UTC para partidos que
   // terminaron pasada la medianoche UTC.
   cron.schedule("30 0 * * *", () => runVerification("cron-midnight"));
 
   logger.info(
-    "Scheduler iniciado — verificación cada hora (12:00–23:00 UTC) + pasada nocturna a las 00:30 UTC",
+    "Scheduler iniciado — verificación cada 2 horas (12:00–22:00 UTC) + pasada nocturna a las 00:30 UTC",
   );
 }
