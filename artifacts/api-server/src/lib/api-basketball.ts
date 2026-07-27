@@ -66,10 +66,19 @@ function mapStatus(short: string): string {
   }
 }
 
-function getBasketballKey(): string[] {
-  return [process.env["BASKETBALL_API_KEY"]].filter((k): k is string =>
-    Boolean(k),
-  );
+/**
+ * Reutiliza las mismas llaves de API-Football en orden de prioridad:
+ * 1. API_FOOTBALL_KEY_1 (primaria)
+ * 2. API_FOOTBALL_KEY_2 (failover)
+ * 3. FOOTBALL_API_KEY   (nombre anterior — compatibilidad)
+ * api-sports.io Basketball usa el mismo sistema de autenticación que api-football.
+ */
+function getApiKeys(): string[] {
+  return [
+    process.env["API_FOOTBALL_KEY_1"],
+    process.env["API_FOOTBALL_KEY_2"],
+    process.env["FOOTBALL_API_KEY"],
+  ].filter((k): k is string => Boolean(k));
 }
 
 async function apiFetch(
@@ -81,10 +90,10 @@ async function apiFetch(
     url.searchParams.set(k, String(v));
   }
 
-  const keys = getBasketballKey();
+  const keys = getApiKeys();
   if (keys.length === 0) {
     throw new Error(
-      "No hay llave de API de baloncesto configurada (BASKETBALL_API_KEY)",
+      "No hay llaves de API configuradas (API_FOOTBALL_KEY_1 / API_FOOTBALL_KEY_2 / FOOTBALL_API_KEY)",
     );
   }
 
