@@ -1,9 +1,16 @@
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Radar, History, Settings, Shield, LogOut } from "lucide-react";
+import { Radar, History, Settings, Shield, LogOut, User } from "lucide-react";
 import { useUser, useClerk } from "@clerk/react";
 import { useGetMe, getGetMeQueryKey } from "@workspace/api-client-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 const navItems = [
   { href: "/dashboard", label: "Radar", icon: Radar },
@@ -13,6 +20,7 @@ const navItems = [
 
 export function Sidebar() {
   const [location] = useLocation();
+  const [profileOpen, setProfileOpen] = useState(false);
   const { user } = useUser();
   const { signOut } = useClerk();
   
@@ -93,8 +101,8 @@ export function Sidebar() {
         {items.map((item) => {
           const isActive = location === item.href;
           return (
-            <Link 
-              key={item.href} 
+            <Link
+              key={item.href}
               href={item.href}
               className={`flex flex-col items-center justify-center w-full h-full gap-1 ${
                 isActive ? "text-primary" : "text-sidebar-foreground"
@@ -105,7 +113,65 @@ export function Sidebar() {
             </Link>
           );
         })}
+
+        {/* Profile button */}
+        <button
+          onClick={() => setProfileOpen(true)}
+          className="flex flex-col items-center justify-center w-full h-full gap-1 text-sidebar-foreground"
+        >
+          <Avatar className="w-5 h-5 border border-border">
+            <AvatarImage src={user?.imageUrl} />
+            <AvatarFallback className="text-[8px] bg-muted text-muted-foreground">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
+          <span className="text-[10px] font-medium">Perfil</span>
+        </button>
       </nav>
+
+      {/* Mobile Profile Sheet */}
+      <Sheet open={profileOpen} onOpenChange={setProfileOpen}>
+        <SheetContent side="bottom" className="md:hidden rounded-t-2xl pb-safe">
+          <SheetHeader className="mb-4">
+            <SheetTitle className="sr-only">Perfil</SheetTitle>
+          </SheetHeader>
+
+          {/* User info */}
+          <div className="flex items-center gap-4 px-1 mb-6">
+            <Avatar className="w-14 h-14 border border-border">
+              <AvatarImage src={user?.imageUrl} />
+              <AvatarFallback className="text-lg bg-muted text-muted-foreground">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex flex-col overflow-hidden">
+              <span className="text-base font-semibold text-foreground truncate">
+                {me?.name || "Usuario"}
+              </span>
+              <span className="text-sm text-muted-foreground truncate">
+                {user?.primaryEmailAddress?.emailAddress}
+              </span>
+              {me?.role === "admin" && (
+                <span className="mt-1 text-xs font-medium text-primary">Administrador</span>
+              )}
+            </div>
+          </div>
+
+          {/* Theme toggle */}
+          <div className="mb-3">
+            <ThemeToggle variant="full" />
+          </div>
+
+          {/* Logout */}
+          <button
+            onClick={handleSignOut}
+            className="w-full flex items-center gap-3 px-3 py-3 rounded-md text-destructive hover:bg-destructive/10 transition-colors"
+          >
+            <LogOut className="w-5 h-5" />
+            <span className="font-medium">Cerrar sesión</span>
+          </button>
+        </SheetContent>
+      </Sheet>
     </>
   );
 }
