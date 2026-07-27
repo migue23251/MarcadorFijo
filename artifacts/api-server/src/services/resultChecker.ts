@@ -1,15 +1,17 @@
 /**
- * Servicio de verificación nocturna de resultados.
+ * Servicio de verificación de resultados de apuestas.
  *
- * Hace UNA sola petición a API-Football para obtener todos los partidos
- * terminados del día, luego evalúa y liquida las apuestas pendientes de
- * cada usuario sin consumir tokens de IA.
+ * Hace UNA petición a API-Football por cada fecha con apuestas pendientes,
+ * luego evalúa y liquida las apuestas sin consumir tokens de IA.
+ *
+ * Soporta lookback de hasta 7 días para recuperar apuestas no resueltas
+ * por fallos previos del cron o partidos con kickoff en días anteriores.
  */
 
 import { logger } from "../lib/logger";
 import { fetchConRotacion } from "../lib/fetchConRotacion";
 import { db, betsTable } from "@workspace/db";
-import { eq, and, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
 // Tipos internos
@@ -18,7 +20,7 @@ import { eq, and, sql } from "drizzle-orm";
 interface FixtureResult {
   homeScore: number;
   awayScore: number;
-  /** FT | AET | PEN | AWD | WO | CANC | ABD */
+  /** FT | AET | PEN | AWD | WO | CANC | ABD | PST */
   statusShort: string;
 }
 
@@ -35,28 +37,32 @@ function normalize(name: string): string {
   return name.toLowerCase().trim();
 }
 
-function todayUTC(): string {
-  return new Date().toISOString().split("T")[0];
-}
-
 /**
- * Comprueba si la fecha de kickoff de la apuesta corresponde a hoy (UTC).
- * `kickoffTime` puede ser ISO string ("2026-07-26T20:00:00Z") o date string.
+ * Extrae la fecha UTC (YYYY-MM-DD) del kickoffTime de una apuesta.
+ * Acepta ISO strings con y sin offset de timezone.
  */
-function isTodayKickoff(kickoffTime: string, date: string): boolean {
-  return kickoffTime.startsWith(date);
+function kickoffDateUTC(kickoffTime: string): string {
+  try {
+    return new Date(kickoffTime).toISOString().split("T")[0];
+  } catch {
+    // Fallback: tomar los primeros 10 caracteres si el parse falla
+    return kickoffTime.slice(0, 10);
+  }
 }
 
 /**
  * Comprueba si el kickoff ya ha ocurrido (la hora de inicio ya pasó).
- * Sólo se deben liquidar apuestas cuyo partido ya haya comenzado.
  */
 function hasKickoffPassed(kickoffTime: string): boolean {
-  return new Date(kickoffTime) <= new Date();
+  try {
+    return new Date(kickoffTime) <= new Date();
+  } catch {
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
-// Petición a API-Football (una sola llamada)
+// Petición a API-Football (una llamada por fecha)
 // ---------------------------------------------------------------------------
 
 function getApiFootballKeys(): string[] {
@@ -78,7 +84,8 @@ async function fetchFinishedFixtures(date: string): Promise<FinishedFixtures> {
     throw new Error("No API-Football keys configuradas (API_FOOTBALL_KEY_1 / FOOTBALL_API_KEY)");
   }
 
-  // Una única petición con todos los estados finalizados
+  // Pedir todos los partidos terminados (o en juego) del día para no perder
+  // partidos aún en curso que podrían terminar pronto.
   const url = new URL("https://v3.football.api-sports.io/fixtures");
   url.searchParams.set("date", date);
   url.searchParams.set("status", "FT-AET-PEN-AWD-WO");
@@ -120,8 +127,7 @@ async function fetchFinishedFixtures(date: string): Promise<FinishedFixtures> {
 
 /**
  * Busca el resultado de un partido en el mapa. Intenta primero coincidencia
- * exacta; si falla, intenta coincidencia parcial (el nombre de la apuesta
- * contiene el nombre del fixture o viceversa).
+ * exacta; si falla, intenta coincidencia parcial.
  */
 function findFixture(
   map: FixtureMap,
@@ -136,9 +142,6 @@ function findFixture(
   if (map.has(exactKey)) return map.get(exactKey);
 
   // 2. Partial match — iterate entries.
-  // Para evitar falsos positivos (ej. "monterrey" coincidiendo con "cf monterrey"
-  // de otra liga), exigimos que la cadena más corta sea al menos el 50 % de la
-  // más larga Y que ambas superen 3 caracteres.
   for (const [key, result] of map.entries()) {
     const [fHome, fAway] = key.split("|");
 
@@ -181,13 +184,10 @@ function evaluateBet(
   // ------------------------------------------------------------------
   if (m.includes("1x2") || m.includes("resultado") || m.includes("match result")) {
     if (homeScore > awayScore) {
-      // Home win → "1"
       return s === "1" || s === "local" || s === "home" ? "won" : "lost";
     } else if (homeScore === awayScore) {
-      // Draw → "X"
       return s === "x" || s === "empate" || s === "draw" ? "won" : "lost";
     } else {
-      // Away win → "2"
       return s === "2" || s === "visitante" || s === "away" ? "won" : "lost";
     }
   }
@@ -202,7 +202,6 @@ function evaluateBet(
     m.includes("menos") ||
     m.includes("total gol")
   ) {
-    // Extraer el número de la selección: "Over 2.5" → 2.5
     const lineMatch = s.match(/(\d+(?:\.\d+)?)/);
     if (!lineMatch) return "void";
     const line = parseFloat(lineMatch[1]);
@@ -210,7 +209,6 @@ function evaluateBet(
     if (s.startsWith("over") || s.startsWith("más") || s.startsWith("+")) {
       return totalGoals > line ? "won" : "lost";
     } else {
-      // Under
       return totalGoals < line ? "won" : "lost";
     }
   }
@@ -238,7 +236,6 @@ function evaluateBet(
   // Hándicap Asiático
   // ------------------------------------------------------------------
   if (m.includes("asiático") || m.includes("asiatico") || m.includes("asian")) {
-    // Selección: "Local -1.5" / "Visitante +1.5" / "Home -1" / "Away +2"
     const lineMatch = s.match(/([+-]?\d+(?:\.\d+)?)\s*$/);
     if (!lineMatch) return "void";
     const handicap = parseFloat(lineMatch[1]);
@@ -249,7 +246,7 @@ function evaluateBet(
 
     if (effectiveHome > effectiveAway) return isHome ? "won" : "lost";
     if (effectiveHome < effectiveAway) return isHome ? "lost" : "won";
-    return "void"; // push on whole-number lines
+    return "void";
   }
 
   // ------------------------------------------------------------------
@@ -265,8 +262,7 @@ function evaluateBet(
     const adjustedHomeGoals = isHome ? homeScore + handicap : homeScore;
     const adjustedAwayGoals = isHome ? awayScore : awayScore + handicap;
 
-    if (adjustedHomeGoals > adjustedAwayGoals)
-      return isHome ? "won" : "lost";
+    if (adjustedHomeGoals > adjustedAwayGoals) return isHome ? "won" : "lost";
     if (adjustedHomeGoals === adjustedAwayGoals) return "void";
     return isHome ? "lost" : "won";
   }
@@ -293,36 +289,37 @@ export interface VerificationSummary {
   notMatched: number;
 }
 
+/**
+ * Verifica y liquida todas las apuestas pendientes cuyos partidos ya
+ * han comenzado, incluyendo apuestas de días anteriores (lookback 7 días).
+ *
+ * Agrupa las apuestas por fecha UTC de kickoff y hace una sola petición
+ * a API-Football por cada fecha única.
+ */
 export async function verificarResultadosDelDia(): Promise<VerificationSummary> {
-  const date = todayUTC();
-  logger.info({ date }, "Iniciando verificación de resultados del día");
+  const now = new Date();
+  const todayUTC = now.toISOString().split("T")[0];
 
-  // 1. Obtener resultados finales de API-Football (1 sola llamada)
-  const { byName: fixtureMap, byId: fixtureIdMap } = await fetchFinishedFixtures(date);
+  logger.info({ date: todayUTC }, "Iniciando verificación de resultados");
 
-  // 2. Consultar apuestas pendientes cuyo kickoff sea hoy
-  const pendingBets = await db
+  // 1. Obtener TODAS las apuestas pendientes cuyo kickoff ya ha pasado,
+  //    sin restricción de fecha (lookback implícito).
+  const allPending = await db
     .select()
     .from(betsTable)
     .where(eq(betsTable.status, "pending"));
 
-  // Filtrar apuestas de hoy cuyo kickoff ya haya pasado.
-  // Sin este segundo filtro, una apuesta sobre un partido futuro podría
-  // liquidarse erróneamente si hay un partido ya terminado de otra liga
-  // con nombres de equipo similares.
-  const todayPending = pendingBets.filter(
-    (b) => isTodayKickoff(b.kickoffTime, date) && hasKickoffPassed(b.kickoffTime),
-  );
+  const overduePending = allPending.filter((b) => hasKickoffPassed(b.kickoffTime));
 
   logger.info(
-    { total: pendingBets.length, todayPending: todayPending.length },
-    "Apuestas pendientes de hoy",
+    { total: allPending.length, overdue: overduePending.length },
+    "Apuestas pendientes con kickoff pasado",
   );
 
   const summary: VerificationSummary = {
-    date,
-    totalPending: todayPending.length,
-    fixturesFound: fixtureMap.size,
+    date: todayUTC,
+    totalPending: overduePending.length,
+    fixturesFound: 0,
     resolved: 0,
     won: 0,
     lost: 0,
@@ -330,82 +327,116 @@ export async function verificarResultadosDelDia(): Promise<VerificationSummary> 
     notMatched: 0,
   };
 
-  // 3. Evaluar cada apuesta
-  for (const bet of todayPending) {
-    // Priorizar búsqueda por ID exacto de API-Football para evitar
-    // falsos positivos por coincidencia de nombre entre ligas distintas.
-    // Si la apuesta tiene fixtureId pero no está en los resultados
-    // finalizados, el partido aún no terminó → dejar pendiente.
-    let fixture: FixtureResult | undefined;
-    if (bet.fixtureId) {
-      fixture = fixtureIdMap.get(bet.fixtureId);
+  if (overduePending.length === 0) {
+    logger.info("No hay apuestas pendientes con kickoff pasado");
+    return summary;
+  }
+
+  // 2. Agrupar apuestas por fecha UTC de kickoff para minimizar
+  //    llamadas a la API (una por fecha única).
+  const betsByDate = new Map<string, typeof overduePending>();
+  for (const bet of overduePending) {
+    const betDate = kickoffDateUTC(bet.kickoffTime);
+    if (!betsByDate.has(betDate)) betsByDate.set(betDate, []);
+    betsByDate.get(betDate)!.push(bet);
+  }
+
+  logger.info(
+    { dates: [...betsByDate.keys()] },
+    "Fechas únicas de kickoff a verificar",
+  );
+
+  // 3. Procesar cada fecha
+  for (const [date, bets] of betsByDate.entries()) {
+    let fixtures: FinishedFixtures;
+    try {
+      fixtures = await fetchFinishedFixtures(date);
+    } catch (err) {
+      logger.error({ err, date }, "Error al obtener resultados de API-Football para la fecha");
+      summary.notMatched += bets.length;
+      continue;
+    }
+
+    summary.fixturesFound += fixtures.byName.size;
+
+    for (const bet of bets) {
+      let fixture: FixtureResult | undefined;
+
+      // Priorizar búsqueda por ID exacto de API-Football
+      if (bet.fixtureId) {
+        fixture = fixtures.byId.get(bet.fixtureId);
+        if (!fixture) {
+          logger.info(
+            { betId: bet.id, fixtureId: bet.fixtureId, date },
+            "Partido con fixtureId aún no finalizado — apuesta sin resolver",
+          );
+          summary.notMatched++;
+          continue;
+        }
+      } else {
+        fixture = findFixture(fixtures.byName, bet.homeTeam, bet.awayTeam);
+      }
+
       if (!fixture) {
-        logger.info(
-          { betId: bet.id, fixtureId: bet.fixtureId },
-          "Partido con fixtureId aún no finalizado — apuesta sin resolver",
+        logger.warn(
+          { betId: bet.id, homeTeam: bet.homeTeam, awayTeam: bet.awayTeam, date },
+          "Partido no encontrado en resultados — apuesta sin resolver",
         );
         summary.notMatched++;
         continue;
       }
-    } else {
-      fixture = findFixture(fixtureMap, bet.homeTeam, bet.awayTeam);
-    }
 
-    if (!fixture) {
-      logger.warn(
-        { betId: bet.id, homeTeam: bet.homeTeam, awayTeam: bet.awayTeam },
-        "Partido no encontrado en resultados de hoy — apuesta sin resolver",
+      // Partido cancelado / suspendido / aplazado → anular apuesta
+      if (
+        fixture.statusShort === "CANC" ||
+        fixture.statusShort === "ABD" ||
+        fixture.statusShort === "PST"
+      ) {
+        await db
+          .update(betsTable)
+          .set({ status: "void", finalScore: "—" })
+          .where(eq(betsTable.id, bet.id));
+        summary.voided++;
+        summary.resolved++;
+        continue;
+      }
+
+      const outcome = evaluateBet(
+        bet.market,
+        bet.selection,
+        fixture.homeScore,
+        fixture.awayScore,
       );
-      summary.notMatched++;
-      continue;
-    }
+      const finalScore = `${fixture.homeScore}-${fixture.awayScore}`;
+      const returnAmount =
+        outcome === "won" ? parseFloat((bet.stake * bet.odds).toFixed(2)) : 0;
 
-    // Partido cancelado / suspendido → anular apuesta
-    if (fixture.statusShort === "CANC" || fixture.statusShort === "ABD" || fixture.statusShort === "PST") {
       await db
         .update(betsTable)
-        .set({ status: "void", finalScore: "—" })
+        .set({
+          status: outcome === "void" ? "void" : outcome,
+          finalScore,
+          returnAmount: outcome === "won" ? returnAmount : null,
+        })
         .where(eq(betsTable.id, bet.id));
-      summary.voided++;
+
+      if (outcome === "won") summary.won++;
+      else if (outcome === "lost") summary.lost++;
+      else summary.voided++;
       summary.resolved++;
-      continue;
+
+      logger.info(
+        {
+          betId: bet.id,
+          market: bet.market,
+          selection: bet.selection,
+          finalScore,
+          outcome,
+          returnAmount: outcome === "won" ? returnAmount : 0,
+        },
+        "Apuesta resuelta",
+      );
     }
-
-    const outcome = evaluateBet(
-      bet.market,
-      bet.selection,
-      fixture.homeScore,
-      fixture.awayScore,
-    );
-    const finalScore = `${fixture.homeScore}-${fixture.awayScore}`;
-    const returnAmount =
-      outcome === "won" ? parseFloat((bet.stake * bet.odds).toFixed(2)) : 0;
-
-    await db
-      .update(betsTable)
-      .set({
-        status: outcome === "void" ? "void" : outcome,
-        finalScore,
-        returnAmount: outcome === "won" ? returnAmount : null,
-      })
-      .where(eq(betsTable.id, bet.id));
-
-    if (outcome === "won") summary.won++;
-    else if (outcome === "lost") summary.lost++;
-    else summary.voided++;
-    summary.resolved++;
-
-    logger.info(
-      {
-        betId: bet.id,
-        market: bet.market,
-        selection: bet.selection,
-        finalScore,
-        outcome,
-        returnAmount: outcome === "won" ? returnAmount : 0,
-      },
-      "Apuesta resuelta",
-    );
   }
 
   logger.info(summary, "Verificación de resultados completada");
