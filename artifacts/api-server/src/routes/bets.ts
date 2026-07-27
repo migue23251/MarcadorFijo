@@ -48,7 +48,7 @@ router.get("/bets/stats", requireAuth, async (req, res): Promise<void> => {
       pendingBets: sql<number>`count(*) filter (where status = 'pending')::int`,
       wonBets: sql<number>`count(*) filter (where status = 'won')::int`,
       lostBets: sql<number>`count(*) filter (where status = 'lost')::int`,
-      totalStaked: sql<number>`coalesce(sum(stake), 0)::float`,
+      totalStaked: sql<number>`coalesce(sum(stake) filter (where status in ('won', 'lost')), 0)::float`,
       totalReturned: sql<number>`coalesce(sum(return_amount) filter (where status = 'won'), 0)::float`,
     })
     .from(betsTable)
