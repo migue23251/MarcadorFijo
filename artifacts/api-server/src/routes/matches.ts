@@ -31,10 +31,11 @@ router.get(
   requireAuth,
   requireSubscription,
   async (req, res): Promise<void> => {
-    const { homeTeam, awayTeam, league } = req.query as {
+    const { homeTeam, awayTeam, league, fixtureId: fixtureIdRaw } = req.query as {
       homeTeam?: string;
       awayTeam?: string;
       league?: string;
+      fixtureId?: string;
     };
 
     if (!homeTeam || !awayTeam || !league) {
@@ -42,20 +43,35 @@ router.get(
       return;
     }
 
-    // Busca el análisis más reciente del partido sin filtrar por fecha,
-    // para que el historial encuentre análisis hechos en días anteriores.
-    const cached = await db
-      .select()
-      .from(analysisCacheTable)
-      .where(
-        and(
-          eq(analysisCacheTable.homeTeam, homeTeam),
-          eq(analysisCacheTable.awayTeam, awayTeam),
-          eq(analysisCacheTable.league, league),
-        ),
-      )
-      .orderBy(desc(analysisCacheTable.createdAt))
-      .limit(1);
+    const fixtureId = fixtureIdRaw ? parseInt(fixtureIdRaw, 10) : undefined;
+
+    // Buscar primero por fixtureId (exacto y rápido), luego fallback por nombres.
+    // Sin filtro de fecha para que el historial encuentre análisis de días anteriores.
+    let cached: typeof analysisCacheTable.$inferSelect[] = [];
+
+    if (fixtureId && !isNaN(fixtureId)) {
+      cached = await db
+        .select()
+        .from(analysisCacheTable)
+        .where(eq(analysisCacheTable.fixtureId, fixtureId))
+        .orderBy(desc(analysisCacheTable.createdAt))
+        .limit(1);
+    }
+
+    if (cached.length === 0) {
+      cached = await db
+        .select()
+        .from(analysisCacheTable)
+        .where(
+          and(
+            eq(analysisCacheTable.homeTeam, homeTeam),
+            eq(analysisCacheTable.awayTeam, awayTeam),
+            eq(analysisCacheTable.league, league),
+          ),
+        )
+        .orderBy(desc(analysisCacheTable.createdAt))
+        .limit(1);
+    }
 
     if (cached.length === 0) {
       res.status(404).json({ error: "No hay análisis cacheado para este partido." });
@@ -251,6 +267,7 @@ router.post(
         kickoffTime,
         oddsData,
         enrichment,
+        fixtureId,
       );
       res.json(analysis);
     } catch (err) {

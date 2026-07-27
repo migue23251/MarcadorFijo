@@ -338,6 +338,7 @@ function BetRow({ bet, currency }: { bet: Bet; currency: string }) {
           homeTeam={bet.homeTeam}
           awayTeam={bet.awayTeam}
           league={bet.league}
+          fixtureId={bet.fixtureId}
           userSelection={bet.selection}
           userMarket={bet.market}
           onClose={() => setShowAnalysis(false)}
@@ -463,6 +464,7 @@ function BetCard({ bet, currency }: { bet: Bet; currency: string }) {
           homeTeam={bet.homeTeam}
           awayTeam={bet.awayTeam}
           league={bet.league}
+          fixtureId={bet.fixtureId}
           userSelection={bet.selection}
           userMarket={bet.market}
           onClose={() => setShowAnalysis(false)}
@@ -480,6 +482,7 @@ function AnalysisModal({
   homeTeam,
   awayTeam,
   league,
+  fixtureId,
   userSelection,
   userMarket,
   onClose,
@@ -487,13 +490,15 @@ function AnalysisModal({
   homeTeam: string;
   awayTeam: string;
   league: string;
+  fixtureId?: number | null;
   userSelection: string;
   userMarket: string;
   onClose: () => void;
 }) {
+  const params = { homeTeam, awayTeam, league, ...(fixtureId ? { fixtureId } : {}) };
   const { data, isLoading, isError, error } = useGetCachedAnalysis(
-    { homeTeam, awayTeam, league },
-    { query: { retry: false, queryKey: ["/api/matches/cached-analysis", homeTeam, awayTeam, league] } },
+    params,
+    { query: { retry: false, queryKey: ["/api/matches/cached-analysis", fixtureId ?? homeTeam, awayTeam, league] } },
   );
 
   const is404 = isError && (error as any)?.status === 404;

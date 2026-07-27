@@ -170,6 +170,7 @@ export const RadarMatchesResponse = zod.array(RadarMatchesResponseItem)
  * @summary Get cached analysis for a match (no AI call)
  */
 export const GetCachedAnalysisQueryParams = zod.object({
+  "fixtureId": zod.coerce.number().optional().describe('API-Football fixture ID. When provided, lookup is by ID (faster, exact). Falls back to team names if not found.'),
   "homeTeam": zod.coerce.string(),
   "awayTeam": zod.coerce.string(),
   "league": zod.coerce.string()

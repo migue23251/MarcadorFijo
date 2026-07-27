@@ -191,6 +191,7 @@ export async function analyzeMatch(
   kickoffTime: string | undefined,
   oddsData?: Record<string, unknown> | null,
   enrichment?: MatchEnrichment | null,
+  fixtureId?: number,
 ): Promise<AIAnalysis> {
   const date = new Date().toISOString().split("T")[0];
 
@@ -272,9 +273,9 @@ export async function analyzeMatch(
   try {
     await db
       .insert(analysisCacheTable)
-      .values({ date, homeTeam, awayTeam, league, result: JSON.stringify(analysis) })
+      .values({ date, homeTeam, awayTeam, league, fixtureId: fixtureId ?? null, result: JSON.stringify(analysis) })
       .onConflictDoNothing();
-    logger.info({ homeTeam, awayTeam, league, date }, "Analysis cached in DB");
+    logger.info({ homeTeam, awayTeam, league, date, fixtureId }, "Analysis cached in DB");
   } catch (err) {
     logger.warn({ err }, "Failed to cache analysis");
   }

@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, uniqueIndex, index } from "drizzle-orm/pg-core";
 
 /**
  * Shared radar cache — one entry for all leagues per day (key = "af_all").
@@ -37,6 +37,8 @@ export const analysisCacheTable = pgTable(
     league: text("league").notNull(),
     /** YYYY-MM-DD in UTC */
     date: text("date").notNull(),
+    /** API-Football fixture ID — used for fast exact lookups from historial */
+    fixtureId: integer("fixture_id"),
     /** Full JSON result */
     result: text("result").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -48,6 +50,7 @@ export const analysisCacheTable = pgTable(
       t.awayTeam,
       t.league,
     ),
+    index("analysis_cache_fixture_id_idx").on(t.fixtureId),
   ],
 );
 

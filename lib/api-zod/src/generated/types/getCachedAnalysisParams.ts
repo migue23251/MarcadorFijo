@@ -7,6 +7,10 @@
  */
 
 export type GetCachedAnalysisParams = {
+/**
+ * API-Football fixture ID. When provided, lookup is by ID (faster, exact). Falls back to team names if not found.
+ */
+fixtureId?: number;
 homeTeam: string;
 awayTeam: string;
 league: string;

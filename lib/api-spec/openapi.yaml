@@ -192,6 +192,12 @@ paths:
       summary: Get cached analysis for a match (no AI call)
       description: Returns the cached analysis stored in the DB from any prior request today. 404 if no one has analyzed this match yet today.
       parameters:
+        - name: fixtureId
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: API-Football fixture ID. When provided, lookup is by ID (faster, exact). Falls back to team names if not found.
         - name: homeTeam
           in: query
           required: true
@@ -219,7 +225,7 @@ paths:
         "403":
           description: Subscription required
         "404":
-          description: No cached analysis found for this match today
+          description: No cached analysis found for this match
 
   /matches/analyze:
     post:
