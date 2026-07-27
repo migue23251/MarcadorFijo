@@ -21,7 +21,7 @@ import {
   systemSettingsTable,
   usersTable,
 } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -42,23 +42,23 @@ router.get(
       return;
     }
 
-    const date = new Date().toISOString().split("T")[0];
-
+    // Busca el análisis más reciente del partido sin filtrar por fecha,
+    // para que el historial encuentre análisis hechos en días anteriores.
     const cached = await db
       .select()
       .from(analysisCacheTable)
       .where(
         and(
-          eq(analysisCacheTable.date, date),
           eq(analysisCacheTable.homeTeam, homeTeam),
           eq(analysisCacheTable.awayTeam, awayTeam),
           eq(analysisCacheTable.league, league),
         ),
       )
+      .orderBy(desc(analysisCacheTable.createdAt))
       .limit(1);
 
     if (cached.length === 0) {
-      res.status(404).json({ error: "No hay análisis cacheado para este partido hoy." });
+      res.status(404).json({ error: "No hay análisis cacheado para este partido." });
       return;
     }
 
