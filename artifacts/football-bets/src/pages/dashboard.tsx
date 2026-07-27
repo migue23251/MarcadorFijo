@@ -32,6 +32,11 @@ interface BasketballMatch {
   score: { home: number | null; away: number | null } | null;
 }
 
+const LIGAS_BALONCESTO = [
+  { id: "nba",        label: "NBA",        flag: "🇺🇸" },
+  { id: "euroleague", label: "EuroLeague", flag: "🇪🇺" },
+];
+
 const LIGAS = [
   { id: "premier_league",   label: "Premier League",   flag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿" },
   { id: "la_liga",          label: "La Liga",           flag: "🇪🇸" },
@@ -197,9 +202,17 @@ export default function Dashboard() {
   const radarRequestLockedRef = useRef(false);
 
   // Basketball radar state
+  const [selectedBasketballLeague, setSelectedBasketballLeague] = useState<"nba" | "euroleague">(() => {
+    const saved = readLS<string>("rb_bball_league", "nba");
+    return saved === "euroleague" ? "euroleague" : "nba";
+  });
   const nbaRadarMutation = useMutation({
-    mutationFn: async (): Promise<BasketballMatch[]> => {
-      const res = await fetch("/api/basketball/radar", { method: "POST", headers: { "Content-Type": "application/json" } });
+    mutationFn: async (league: "nba" | "euroleague"): Promise<BasketballMatch[]> => {
+      const res = await fetch("/api/basketball/radar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ league }),
+      });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         const err: any = new Error(data?.error ?? `HTTP ${res.status}`);
@@ -210,20 +223,25 @@ export default function Dashboard() {
       return res.json();
     },
   });
-  const [persistedNbaResults, setPersistedNbaResults] = useState<BasketballMatch[] | undefined>(() => readLS("rb_nba_radar", undefined));
+  const [persistedNbaResults, setPersistedNbaResults] = useState<BasketballMatch[] | undefined>(() => {
+    const league = readLS<string>("rb_bball_league", "nba");
+    const key = league === "euroleague" ? "rb_euroleague_radar" : "rb_nba_radar";
+    return readLS(key, undefined);
+  });
   const nbaRadarLockedRef = useRef(false);
 
   const handleNbaRadarScan = useCallback(() => {
     if (nbaRadarLockedRef.current || nbaRadarMutation.isPending) return;
     nbaRadarLockedRef.current = true;
-    nbaRadarMutation.mutate(undefined, {
+    nbaRadarMutation.mutate(selectedBasketballLeague, {
       onSuccess: (data) => {
         setPersistedNbaResults(data);
-        try { localStorage.setItem("rb_nba_radar", JSON.stringify(data)); } catch {}
+        const cacheKey = selectedBasketballLeague === "euroleague" ? "rb_euroleague_radar" : "rb_nba_radar";
+        try { localStorage.setItem(cacheKey, JSON.stringify(data)); } catch {}
       },
       onSettled: () => { nbaRadarLockedRef.current = false; },
     });
-  }, [nbaRadarMutation]);
+  }, [nbaRadarMutation, selectedBasketballLeague]);
 
   useEffect(() => {
     try { localStorage.setItem("rb_leagues", JSON.stringify(selectedLeagues)); } catch {}
@@ -326,7 +344,39 @@ export default function Dashboard() {
 
       {sport === "baloncesto" && (
         <>
-          {/* Radar NBA */}
+          {/* Selector de liga */}
+          <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <Trophy className="w-4 h-4 text-primary" />
+              <span className="text-sm font-semibold">Liga a escanear</span>
+            </div>
+            <div className="flex gap-2">
+              {LIGAS_BALONCESTO.map(liga => (
+                <button
+                  key={liga.id}
+                  onClick={() => {
+                    setSelectedBasketballLeague(liga.id as "nba" | "euroleague");
+                    try { localStorage.setItem("rb_bball_league", liga.id); } catch {}
+                    setPersistedNbaResults(undefined);
+                    nbaRadarMutation.reset();
+                    const cacheKey = liga.id === "euroleague" ? "rb_euroleague_radar" : "rb_nba_radar";
+                    const saved = readLS<BasketballMatch[] | undefined>(cacheKey, undefined);
+                    if (saved) setPersistedNbaResults(saved);
+                  }}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
+                    selectedBasketballLeague === liga.id
+                      ? "bg-primary/10 border-primary/50 text-primary"
+                      : "bg-secondary border-border text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                  }`}
+                >
+                  <span>{liga.flag}</span>
+                  <span>{liga.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Radar Baloncesto */}
           <div className="relative rounded-xl border border-border bg-card overflow-hidden">
             <div className="p-8 flex flex-col items-center justify-center min-h-[260px] text-center relative z-20">
               <button
@@ -344,7 +394,10 @@ export default function Dashboard() {
                   {nbaRadarMutation.isPending ? "Buscando..." : "Desplegar Radar"}
                 </span>
               </button>
-              <p className="mt-4 text-xs text-muted-foreground">NBA · Partidos de hoy</p>
+              <p className="mt-4 text-xs text-muted-foreground">
+                {LIGAS_BALONCESTO.find(l => l.id === selectedBasketballLeague)?.flag}{" "}
+                {LIGAS_BALONCESTO.find(l => l.id === selectedBasketballLeague)?.label} · Partidos de hoy
+              </p>
               {!isActive && (
                 <p className="mt-1 text-xs text-muted-foreground">
                   Modo freemium · 1 análisis gratuito por día
@@ -393,7 +446,9 @@ export default function Dashboard() {
               <div className="space-y-4 animate-in slide-in-from-bottom-8 duration-700">
                 <div className="flex items-center gap-2 border-b border-border pb-2 flex-wrap">
                   <Target className="w-5 h-5 text-primary" />
-                  <h2 className="text-xl font-semibold">Partidos NBA Detectados</h2>
+                  <h2 className="text-xl font-semibold">
+                    Partidos {LIGAS_BALONCESTO.find(l => l.id === selectedBasketballLeague)?.label} Detectados
+                  </h2>
                   <Badge className="ml-2">{results.length} Partido{results.length !== 1 ? "s" : ""}</Badge>
                   {isStale && (
                     <span className="ml-auto text-xs text-muted-foreground flex items-center gap-1">
@@ -403,7 +458,7 @@ export default function Dashboard() {
                 </div>
                 {results.length === 0 ? (
                   <p className="text-muted-foreground text-center py-12 bg-card rounded-md border border-border">
-                    No hay partidos NBA programados para hoy.
+                    No hay partidos {LIGAS_BALONCESTO.find(l => l.id === selectedBasketballLeague)?.label} programados para hoy.
                   </p>
                 ) : (
                   <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">

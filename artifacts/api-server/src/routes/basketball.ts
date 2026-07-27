@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { requireAuth, isSubscriptionCurrentlyActive, type AuthenticatedRequest } from "../lib/auth";
-import { getNbaMatchesForToday } from "../lib/api-basketball";
+import { getBasketballMatchesForToday, type BasketballLeague } from "../lib/api-basketball";
 import { logger } from "../lib/logger";
 import { db, systemSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
@@ -37,7 +37,10 @@ router.post(
     }
 
     try {
-      const matches = await getNbaMatchesForToday();
+      const rawLeague = (req.body as any)?.league;
+      const league: BasketballLeague =
+        rawLeague === "euroleague" ? "euroleague" : "nba";
+      const matches = await getBasketballMatchesForToday(league);
       res.json(matches);
     } catch (err) {
       logger.error({ err }, "Basketball radar error");

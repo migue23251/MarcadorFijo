@@ -6,14 +6,16 @@ import { eq, and } from "drizzle-orm";
 const API_BASKETBALL_BASE = "https://v1.basketball.api-sports.io";
 const API_BASKETBALL_HOST = "v1.basketball.api-sports.io";
 
-/** NBA league ID on api-sports.io */
-const NBA_LEAGUE_ID = 12;
+/** Supported basketball leagues */
+export type BasketballLeague = "nba" | "euroleague";
+
+const LEAGUE_CONFIG: Record<BasketballLeague, { id: number; cacheKey: string }> = {
+  nba:        { id: 12,  cacheKey: "bball_nba" },
+  euroleague: { id: 120, cacheKey: "bball_euroleague" },
+};
 
 /** Cache TTL for results containing live games (2 min) */
 const LIVE_CACHE_TTL_MS = 2 * 60 * 1000;
-
-/** Cache key for the NBA daily dump */
-const NBA_CACHE_KEY = "bball_nba";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -33,11 +35,11 @@ export interface BasketballMatch {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getNbaSeason(): string {
+function getBasketballSeason(): string {
   const d = new Date();
   const year = d.getFullYear();
   const month = d.getMonth(); // 0-indexed
-  // NBA season starts in October (month 9); before October use previous year as base
+  // Both NBA and EuroLeague seasons start in October (month 9)
   const base = month >= 9 ? year : year - 1;
   return `${base}-${base + 1}`;
 }
@@ -123,9 +125,12 @@ async function apiFetch(
 // Main export
 // ---------------------------------------------------------------------------
 
-export async function getNbaMatchesForToday(): Promise<BasketballMatch[]> {
+export async function getBasketballMatchesForToday(
+  league: BasketballLeague = "nba",
+): Promise<BasketballMatch[]> {
+  const config = LEAGUE_CONFIG[league];
   const date = new Date().toISOString().split("T")[0];
-  const season = getNbaSeason();
+  const season = getBasketballSeason();
 
   // 1. Check cache
   const cached = await db
@@ -134,7 +139,7 @@ export async function getNbaMatchesForToday(): Promise<BasketballMatch[]> {
     .where(
       and(
         eq(radarCacheTable.date, date),
-        eq(radarCacheTable.league, NBA_CACHE_KEY),
+        eq(radarCacheTable.league, config.cacheKey),
       ),
     )
     .limit(1);
@@ -148,29 +153,29 @@ export async function getNbaMatchesForToday(): Promise<BasketballMatch[]> {
     const isValid = !hadLive || ageMs < LIVE_CACHE_TTL_MS;
 
     if (isValid) {
-      logger.info({ date, hadLive, ageMs }, "NBA radar cache hit — serving from DB");
+      logger.info({ date, league, hadLive, ageMs }, "Basketball radar cache hit — serving from DB");
       return cachedMatches;
     }
-    logger.info({ date, ageMs }, "NBA radar cache stale — refreshing");
+    logger.info({ date, league, ageMs }, "Basketball radar cache stale — refreshing");
   }
 
   // 2. Fetch from API
-  logger.info({ date, season }, "Fetching NBA games from api-sports.io");
+  logger.info({ date, season, league }, "Fetching basketball games from api-sports.io");
 
   let raw: any[];
   try {
     raw = await apiFetch("/games", {
-      league: NBA_LEAGUE_ID,
+      league: config.id,
       season,
       date,
     });
   } catch (err) {
-    logger.error({ err }, "API Basketball fetch failed");
+    logger.error({ err, league }, "API Basketball fetch failed");
     throw err;
   }
 
   if (!Array.isArray(raw)) {
-    logger.warn({ date, season }, "API Basketball returned no games array");
+    logger.warn({ date, season, league }, "API Basketball returned no games array");
     raw = [];
   }
 
@@ -198,17 +203,20 @@ export async function getNbaMatchesForToday(): Promise<BasketballMatch[]> {
     .where(
       and(
         eq(radarCacheTable.date, date),
-        eq(radarCacheTable.league, NBA_CACHE_KEY),
+        eq(radarCacheTable.league, config.cacheKey),
       ),
     )
-    .catch((err) => logger.warn({ err }, "Failed to clear stale NBA radar cache"));
+    .catch((err) => logger.warn({ err }, "Failed to clear stale basketball radar cache"));
 
   await db
     .insert(radarCacheTable)
-    .values({ date, league: NBA_CACHE_KEY, result: JSON.stringify(matches) })
+    .values({ date, league: config.cacheKey, result: JSON.stringify(matches) })
     .onConflictDoNothing()
-    .catch((err) => logger.warn({ err }, "Failed to write NBA radar cache"));
+    .catch((err) => logger.warn({ err }, "Failed to write basketball radar cache"));
 
-  logger.info({ date, count: matches.length }, "NBA games cached");
+  logger.info({ date, league, count: matches.length }, "Basketball games cached");
   return matches;
 }
+
+/** @deprecated use getBasketballMatchesForToday("nba") */
+export const getNbaMatchesForToday = () => getBasketballMatchesForToday("nba");
