@@ -37,10 +37,20 @@ router.post(
     }
 
     try {
-      const rawLeague = (req.body as any)?.league;
-      const league: BasketballLeague =
-        rawLeague === "euroleague" ? "euroleague" : "nba";
-      const matches = await getBasketballMatchesForToday(league);
+      const body = req.body as any;
+      // Accept either `leagues: string[]` (new) or `league: string` (legacy)
+      const VALID: BasketballLeague[] = ["nba", "euroleague"];
+      let leagues: BasketballLeague[];
+      if (Array.isArray(body?.leagues) && body.leagues.length > 0) {
+        leagues = (body.leagues as string[]).filter((l): l is BasketballLeague => VALID.includes(l as BasketballLeague));
+      } else {
+        const single = body?.league;
+        leagues = [VALID.includes(single) ? single : "nba"];
+      }
+      if (leagues.length === 0) leagues = ["nba"];
+
+      const results = await Promise.all(leagues.map(l => getBasketballMatchesForToday(l)));
+      const matches = results.flat();
       res.json(matches);
     } catch (err) {
       logger.error({ err }, "Basketball radar error");

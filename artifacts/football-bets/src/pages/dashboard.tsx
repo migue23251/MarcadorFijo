@@ -202,16 +202,15 @@ export default function Dashboard() {
   const radarRequestLockedRef = useRef(false);
 
   // Basketball radar state
-  const [selectedBasketballLeague, setSelectedBasketballLeague] = useState<"nba" | "euroleague">(() => {
-    const saved = readLS<string>("rb_bball_league", "nba");
-    return saved === "euroleague" ? "euroleague" : "nba";
-  });
+  const [selectedBasketballLeagues, setSelectedBasketballLeagues] = useState<("nba" | "euroleague")[]>(() =>
+    readLS<("nba" | "euroleague")[]>("rb_bball_leagues", ["nba"])
+  );
   const nbaRadarMutation = useMutation({
-    mutationFn: async (league: "nba" | "euroleague"): Promise<BasketballMatch[]> => {
+    mutationFn: async (leagues: ("nba" | "euroleague")[]): Promise<BasketballMatch[]> => {
       const res = await fetch("/api/basketball/radar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ league }),
+        body: JSON.stringify({ leagues }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -223,25 +222,33 @@ export default function Dashboard() {
       return res.json();
     },
   });
-  const [persistedNbaResults, setPersistedNbaResults] = useState<BasketballMatch[] | undefined>(() => {
-    const league = readLS<string>("rb_bball_league", "nba");
-    const key = league === "euroleague" ? "rb_euroleague_radar" : "rb_nba_radar";
-    return readLS(key, undefined);
-  });
+  const [persistedNbaResults, setPersistedNbaResults] = useState<BasketballMatch[] | undefined>(() =>
+    readLS("rb_bball_radar", undefined)
+  );
   const nbaRadarLockedRef = useRef(false);
+
+  const toggleBasketballLeague = useCallback((id: "nba" | "euroleague") => {
+    setSelectedBasketballLeagues(prev => {
+      const next = prev.includes(id) ? prev.filter(l => l !== id) : [...prev, id];
+      const result = next.length === 0 ? [id] : next; // keep at least one
+      try { localStorage.setItem("rb_bball_leagues", JSON.stringify(result)); } catch {}
+      return result;
+    });
+    setPersistedNbaResults(undefined);
+    nbaRadarMutation.reset();
+  }, [nbaRadarMutation]);
 
   const handleNbaRadarScan = useCallback(() => {
     if (nbaRadarLockedRef.current || nbaRadarMutation.isPending) return;
     nbaRadarLockedRef.current = true;
-    nbaRadarMutation.mutate(selectedBasketballLeague, {
+    nbaRadarMutation.mutate(selectedBasketballLeagues, {
       onSuccess: (data) => {
         setPersistedNbaResults(data);
-        const cacheKey = selectedBasketballLeague === "euroleague" ? "rb_euroleague_radar" : "rb_nba_radar";
-        try { localStorage.setItem(cacheKey, JSON.stringify(data)); } catch {}
+        try { localStorage.setItem("rb_bball_radar", JSON.stringify(data)); } catch {}
       },
       onSettled: () => { nbaRadarLockedRef.current = false; },
     });
-  }, [nbaRadarMutation, selectedBasketballLeague]);
+  }, [nbaRadarMutation, selectedBasketballLeagues]);
 
   useEffect(() => {
     try { localStorage.setItem("rb_leagues", JSON.stringify(selectedLeagues)); } catch {}
@@ -351,29 +358,30 @@ export default function Dashboard() {
               <span className="text-sm font-semibold">Liga a escanear</span>
             </div>
             <div className="flex gap-2">
-              {LIGAS_BALONCESTO.map(liga => (
-                <button
-                  key={liga.id}
-                  onClick={() => {
-                    setSelectedBasketballLeague(liga.id as "nba" | "euroleague");
-                    try { localStorage.setItem("rb_bball_league", liga.id); } catch {}
-                    setPersistedNbaResults(undefined);
-                    nbaRadarMutation.reset();
-                    const cacheKey = liga.id === "euroleague" ? "rb_euroleague_radar" : "rb_nba_radar";
-                    const saved = readLS<BasketballMatch[] | undefined>(cacheKey, undefined);
-                    if (saved) setPersistedNbaResults(saved);
-                  }}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
-                    selectedBasketballLeague === liga.id
-                      ? "bg-primary/10 border-primary/50 text-primary"
-                      : "bg-secondary border-border text-muted-foreground hover:border-primary/30 hover:text-foreground"
-                  }`}
-                >
-                  <span>{liga.flag}</span>
-                  <span>{liga.label}</span>
-                </button>
-              ))}
+              {LIGAS_BALONCESTO.map(liga => {
+                const active = selectedBasketballLeagues.includes(liga.id as "nba" | "euroleague");
+                return (
+                  <button
+                    key={liga.id}
+                    onClick={() => toggleBasketballLeague(liga.id as "nba" | "euroleague")}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
+                      active
+                        ? "bg-primary/10 border-primary/50 text-primary"
+                        : "bg-secondary border-border text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                    }`}
+                  >
+                    {active && <Check className="w-3.5 h-3.5 shrink-0" />}
+                    <span>{liga.flag}</span>
+                    <span>{liga.label}</span>
+                  </button>
+                );
+              })}
             </div>
+            <p className="text-xs text-muted-foreground">
+              {selectedBasketballLeagues.length === LIGAS_BALONCESTO.length
+                ? "El radar buscará en todas las ligas seleccionadas."
+                : `Escaneando: ${selectedBasketballLeagues.map(id => LIGAS_BALONCESTO.find(l => l.id === id)?.label).join(" + ")}.`}
+            </p>
           </div>
 
           {/* Radar Baloncesto */}
@@ -395,8 +403,8 @@ export default function Dashboard() {
                 </span>
               </button>
               <p className="mt-4 text-xs text-muted-foreground">
-                {LIGAS_BALONCESTO.find(l => l.id === selectedBasketballLeague)?.flag}{" "}
-                {LIGAS_BALONCESTO.find(l => l.id === selectedBasketballLeague)?.label} · Partidos de hoy
+                {selectedBasketballLeagues.map(id => LIGAS_BALONCESTO.find(l => l.id === id)?.flag).join(" ")}
+                {" "}{selectedBasketballLeagues.map(id => LIGAS_BALONCESTO.find(l => l.id === id)?.label).join(" + ")} · Partidos de hoy
               </p>
               {!isActive && (
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -447,7 +455,7 @@ export default function Dashboard() {
                 <div className="flex items-center gap-2 border-b border-border pb-2 flex-wrap">
                   <Target className="w-5 h-5 text-primary" />
                   <h2 className="text-xl font-semibold">
-                    Partidos {LIGAS_BALONCESTO.find(l => l.id === selectedBasketballLeague)?.label} Detectados
+                    Partidos {selectedBasketballLeagues.map(id => LIGAS_BALONCESTO.find(l => l.id === id)?.label).join(" + ")} Detectados
                   </h2>
                   <Badge className="ml-2">{results.length} Partido{results.length !== 1 ? "s" : ""}</Badge>
                   {isStale && (
@@ -458,7 +466,7 @@ export default function Dashboard() {
                 </div>
                 {results.length === 0 ? (
                   <p className="text-muted-foreground text-center py-12 bg-card rounded-md border border-border">
-                    No hay partidos {LIGAS_BALONCESTO.find(l => l.id === selectedBasketballLeague)?.label} programados para hoy.
+                    No hay partidos de {selectedBasketballLeagues.map(id => LIGAS_BALONCESTO.find(l => l.id === id)?.label).join(" + ")} programados para hoy.
                   </p>
                 ) : (
                   <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
