@@ -9,4 +9,6 @@ import type { ListBetsStatus } from './listBetsStatus';
 
 export type ListBetsParams = {
 status?: ListBetsStatus;
+page?: number;
+limit?: number;
 };

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, desc, count } from "drizzle-orm";
 import { db, betsTable } from "@workspace/db";
 import {
   ListBetsQueryParams,
@@ -87,18 +87,39 @@ router.get("/bets", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  const page = params.data.page ?? 1;
+  const limit = params.data.limit ?? 15;
+  const offset = (page - 1) * limit;
+
   const conditions = [eq(betsTable.clerkId, user.clerkId)];
   if (params.data.status) {
     conditions.push(eq(betsTable.status, params.data.status));
   }
 
-  const bets = await db
-    .select()
-    .from(betsTable)
-    .where(and(...conditions))
-    .orderBy(betsTable.createdAt);
+  const [totalResult, bets] = await Promise.all([
+    db
+      .select({ total: count() })
+      .from(betsTable)
+      .where(and(...conditions)),
+    db
+      .select()
+      .from(betsTable)
+      .where(and(...conditions))
+      .orderBy(desc(betsTable.kickoffTime))
+      .limit(limit)
+      .offset(offset),
+  ]);
 
-  res.json(ListBetsResponse.parse(bets.map(serializeBet)));
+  const total = totalResult[0]?.total ?? 0;
+  const totalPages = Math.ceil(total / limit);
+
+  res.json(ListBetsResponse.parse({
+    data: bets.map(serializeBet),
+    total,
+    page,
+    limit,
+    totalPages,
+  }));
 });
 
 // POST /bets

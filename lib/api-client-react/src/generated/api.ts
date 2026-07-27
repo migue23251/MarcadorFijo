@@ -25,6 +25,7 @@ import type {
   AnalyzeInput,
   Bet,
   BetInput,
+  BetsPage,
   BetStats,
   BetUpdate,
   GetCachedAnalysisParams,
@@ -833,9 +834,9 @@ export const getListBetsUrl = (params?: ListBetsParams,) => {
 /**
  * @summary List all bets for the current user
  */
-export const listBets = async (params?: ListBetsParams, options?: RequestInit): Promise<Bet[]> => {
+export const listBets = async (params?: ListBetsParams, options?: RequestInit): Promise<BetsPage> => {
 
-  return customFetch<Bet[]>(getListBetsUrl(params),
+  return customFetch<BetsPage>(getListBetsUrl(params),
   {
     ...options,
     method: 'GET'

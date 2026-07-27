@@ -32,16 +32,29 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 
+const PAGE_SIZE = 15;
+
 export default function Historial() {
   const [statusFilter, setStatusFilter] = useState<ListBetsStatus | undefined>(undefined);
+  const [page, setPage] = useState(1);
+
+  // Reset to page 1 when filter changes
+  const handleFilterChange = (f: ListBetsStatus | undefined) => {
+    setStatusFilter(f);
+    setPage(1);
+  };
 
   const { data: stats } = useGetBetStats({ query: { queryKey: getGetBetStatsQueryKey() } });
-  const { data: bets, isLoading } = useListBets(
-    { status: statusFilter },
-    { query: { queryKey: getListBetsQueryKey({ status: statusFilter }) } },
+  const { data: paged, isLoading } = useListBets(
+    { status: statusFilter, page, limit: PAGE_SIZE },
+    { query: { queryKey: getListBetsQueryKey({ status: statusFilter, page, limit: PAGE_SIZE }) } },
   );
   const { data: me } = useGetMe({ query: { queryKey: getGetMeQueryKey() } });
   const currency = me?.currency ?? "COP";
+
+  const bets = paged?.data ?? [];
+  const totalPages = paged?.totalPages ?? 1;
+  const total = paged?.total ?? 0;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -79,11 +92,11 @@ export default function Historial() {
       <div className="bg-card border border-border rounded-lg overflow-hidden flex flex-col min-h-[500px]">
         {/* Filters */}
         <div className="p-4 border-b border-border flex flex-wrap gap-2">
-          <FilterButton active={statusFilter === undefined} onClick={() => setStatusFilter(undefined)}>Todas</FilterButton>
-          <FilterButton active={statusFilter === "pending"} onClick={() => setStatusFilter("pending")}>Pendientes</FilterButton>
-          <FilterButton active={statusFilter === "won"} onClick={() => setStatusFilter("won")}>Ganadas</FilterButton>
-          <FilterButton active={statusFilter === "lost"} onClick={() => setStatusFilter("lost")}>Perdidas</FilterButton>
-          <FilterButton active={statusFilter === "void"} onClick={() => setStatusFilter("void")}>Anuladas</FilterButton>
+          <FilterButton active={statusFilter === undefined} onClick={() => handleFilterChange(undefined)}>Todas</FilterButton>
+          <FilterButton active={statusFilter === "pending"} onClick={() => handleFilterChange("pending")}>Pendientes</FilterButton>
+          <FilterButton active={statusFilter === "won"} onClick={() => handleFilterChange("won")}>Ganadas</FilterButton>
+          <FilterButton active={statusFilter === "lost"} onClick={() => handleFilterChange("lost")}>Perdidas</FilterButton>
+          <FilterButton active={statusFilter === "void"} onClick={() => handleFilterChange("void")}>Anuladas</FilterButton>
         </div>
 
         {/* Content */}
@@ -134,6 +147,52 @@ export default function Historial() {
                   <BetCard key={bet.id} bet={bet} currency={currency} />
                 ))}
               </div>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-secondary/20">
+                  <span className="text-xs text-muted-foreground">
+                    {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, total)} de {total}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setPage(1)}
+                      disabled={page === 1}
+                      className="px-2 py-1 text-xs rounded border border-border text-muted-foreground hover:bg-secondary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      aria-label="Primera página"
+                    >
+                      «
+                    </button>
+                    <button
+                      onClick={() => setPage(p => Math.max(1, p - 1))}
+                      disabled={page === 1}
+                      className="px-2 py-1 text-xs rounded border border-border text-muted-foreground hover:bg-secondary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      aria-label="Página anterior"
+                    >
+                      ‹
+                    </button>
+                    <span className="px-3 py-1 text-xs font-semibold bg-primary/10 text-primary border border-primary/30 rounded">
+                      {page} / {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                      disabled={page === totalPages}
+                      className="px-2 py-1 text-xs rounded border border-border text-muted-foreground hover:bg-secondary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      aria-label="Página siguiente"
+                    >
+                      ›
+                    </button>
+                    <button
+                      onClick={() => setPage(totalPages)}
+                      disabled={page === totalPages}
+                      className="px-2 py-1 text-xs rounded border border-border text-muted-foreground hover:bg-secondary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      aria-label="Última página"
+                    >
+                      »
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

@@ -222,7 +222,9 @@ export const AnalyzeMatchResponse = zod.object({
  * @summary List all bets for the current user
  */
 export const ListBetsQueryParams = zod.object({
-  "status": zod.enum(['pending', 'won', 'lost', 'void']).optional()
+  "status": zod.enum(['pending', 'won', 'lost', 'void']).optional(),
+  "page": zod.coerce.number().int().min(1).optional().default(1),
+  "limit": zod.coerce.number().int().min(1).max(100).optional().default(15)
 })
 
 export const ListBetsResponseItem = zod.object({
@@ -242,7 +244,13 @@ export const ListBetsResponseItem = zod.object({
   "createdAt": zod.string(),
   "updatedAt": zod.string().optional()
 })
-export const ListBetsResponse = zod.array(ListBetsResponseItem)
+export const ListBetsResponse = zod.object({
+  "data": zod.array(ListBetsResponseItem),
+  "total": zod.number().int(),
+  "page": zod.number().int(),
+  "limit": zod.number().int(),
+  "totalPages": zod.number().int()
+})
 
 
 /**

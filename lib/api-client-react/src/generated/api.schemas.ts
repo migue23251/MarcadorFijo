@@ -233,6 +233,16 @@ league: string;
 
 export type ListBetsParams = {
 status?: ListBetsStatus;
+page?: number;
+limit?: number;
+}
+
+export interface BetsPage {
+  data: Bet[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 };
 
 export type ListBetsStatus = typeof ListBetsStatus[keyof typeof ListBetsStatus];
