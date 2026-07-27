@@ -27,10 +27,16 @@ export function initScheduler(): void {
     }
   }
 
-  // Verificación cada 2 horas, las 24 horas del día (12 llamadas diarias).
-  cron.schedule("0 */2 * * *", () => runVerification("cron-every-2h"));
+  // Verificación cada 2 horas durante el día (02:00–22:00 UTC, 11 llamadas).
+  cron.schedule("0 2,4,6,8,10,12,14,16,18,20,22 * * *", () => runVerification("cron-every-2h"));
+
+  // Pasada de medianoche (00:00 UTC): además de los partidos del día actual,
+  // el lookback automático del servicio captura las apuestas del día anterior
+  // cuyos partidos terminaron entre las 22:00 y las 23:59 UTC y que no
+  // pudieron resolverse en la pasada de las 22:00 (partido aún en curso).
+  cron.schedule("0 0 * * *", () => runVerification("cron-midnight-lookback"));
 
   logger.info(
-    "Scheduler iniciado — verificación cada 2 horas (00:00–22:00 UTC, 12 llamadas/día)",
+    "Scheduler iniciado — verificación cada 2 horas (02:00–22:00 UTC) + medianoche con lookback al día anterior (12 llamadas/día)",
   );
 }
