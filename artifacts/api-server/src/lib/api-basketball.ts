@@ -264,13 +264,13 @@ export async function getBasketballMatchesForToday(
   await db
     .delete(radarCacheTable)
     .where(and(eq(radarCacheTable.date, date), eq(radarCacheTable.league, config.cacheKey)))
-    .catch((err) => logger.warn({ err }, "Failed to clear stale basketball radar cache"));
+    .catch((err: unknown) => logger.warn({ err }, "Failed to clear stale basketball radar cache"));
 
   await db
     .insert(radarCacheTable)
     .values({ date, league: config.cacheKey, result: JSON.stringify(matches) })
     .onConflictDoNothing()
-    .catch((err) => logger.warn({ err }, "Failed to write basketball radar cache"));
+    .catch((err: unknown) => logger.warn({ err }, "Failed to write basketball radar cache"));
 
   logger.info({ date, league, count: matches.length }, "Basketball games cached");
   return matches;

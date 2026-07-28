@@ -545,7 +545,7 @@ export async function getMatchesFromApiFootball(
             eq(radarCacheTable.league, ALL_FIXTURES_CACHE_KEY),
           ),
         )
-        .catch((err) => logger.warn({ err }, "Failed to clear stale radar cache"));
+        .catch((err: unknown) => logger.warn({ err }, "Failed to clear stale radar cache"));
 
       await db
         .insert(radarCacheTable)
@@ -555,7 +555,7 @@ export async function getMatchesFromApiFootball(
           result: JSON.stringify(allFixtures),
         })
         .onConflictDoNothing()
-        .catch((err) => logger.warn({ err }, "Failed to write radar cache"));
+        .catch((err: unknown) => logger.warn({ err }, "Failed to write radar cache"));
     } catch (err) {
       logger.error({ err }, "API-Football fetch failed");
       throw err;
@@ -582,7 +582,7 @@ export async function getMatchesFromApiFootball(
 
       const analysedSet = new Set(
         analysedToday.map(
-          (r) =>
+          (r: { homeTeam: string; awayTeam: string; league: string }) =>
             `${r.homeTeam.toLowerCase()}|${r.awayTeam.toLowerCase()}|${r.league.toLowerCase()}`,
         ),
       );

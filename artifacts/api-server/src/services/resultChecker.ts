@@ -508,7 +508,7 @@ export async function verificarResultadosDelDia(): Promise<VerificationSummary> 
     .from(betsTable)
     .where(eq(betsTable.status, "pending"));
 
-  const overduePending = allPending.filter((b) => hasKickoffPassed(b.kickoffTime));
+  const overduePending = allPending.filter((b: { kickoffTime: string }) => hasKickoffPassed(b.kickoffTime));
 
   logger.info(
     { total: allPending.length, overdue: overduePending.length },

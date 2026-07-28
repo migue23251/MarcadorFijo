@@ -213,7 +213,7 @@ function buildUserPrompt(data: BasketballMatchData): string {
 
   // ── Bajas y lesiones ──────────────────────────────────────────────────────
   sections.push("\n=== BAJAS Y LESIONES CONFIRMADAS ===");
-  sections.push(formatInjuries(homeInjuries, awayInjuries, homeTeam, awayTeam));
+  sections.push(formatInjuries(homeInjuries ?? [], awayInjuries ?? [], homeTeam, awayTeam));
 
   // ── Cuotas (reservado) ────────────────────────────────────────────────────
   sections.push("\n=== CUOTAS DE MERCADO ===");
