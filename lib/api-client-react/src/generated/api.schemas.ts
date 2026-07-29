@@ -156,6 +156,19 @@ export const BetStatus = {
   void: 'void',
 } as const;
 
+export interface BetFinalStats {
+  homeCorners?: number;
+  awayCorners?: number;
+  totalCorners?: number;
+  homeYellowCards?: number;
+  awayYellowCards?: number;
+  homeRedCards?: number;
+  awayRedCards?: number;
+  totalCards?: number;
+}
+
+export type BetConfidence = 'low' | 'medium' | 'high';
+
 export interface Bet {
   id: number;
   homeTeam: string;
@@ -175,7 +188,16 @@ export interface Bet {
      */
   fixtureId?: number | null;
   /** @nullable */
+  confidence?: BetConfidence | null;
+  /** @nullable */
   notes?: string | null;
+  /**
+   * Final goal score, e.g. "2-1"
+   * @nullable
+   */
+  finalScore?: string | null;
+  /** @nullable */
+  finalStats?: BetFinalStats | null;
   createdAt: string;
   updatedAt?: string;
 }
@@ -191,6 +213,7 @@ export interface BetInput {
   stake: number;
   /** API-Football fixture ID for exact result matching */
   fixtureId?: number;
+  confidence?: BetConfidence;
   notes?: string;
 }
 
