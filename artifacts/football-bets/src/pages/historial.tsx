@@ -451,26 +451,7 @@ function BetRow({ bet, currency }: { bet: Bet; currency: string }) {
             >
               <ScanSearch className="w-4 h-4" />
             </button>
-            {bet.status === "pending" ? (
-              <>
-                <button
-                  onClick={() => handleStatusUpdate("won")}
-                  disabled={updateBet.isPending}
-                  className="p-1.5 bg-emerald-500/20 text-emerald-500 hover:bg-emerald-500/30 rounded border border-emerald-500/30 transition-colors"
-                  title="Marcar como Ganada"
-                >
-                  <Check className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => handleStatusUpdate("lost")}
-                  disabled={updateBet.isPending}
-                  className="p-1.5 bg-red-500/20 text-red-500 hover:bg-red-500/30 rounded border border-red-500/30 transition-colors"
-                  title="Marcar como Perdida"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </>
-            ) : (
+            {bet.status !== "pending" && (
               <span className="text-xs text-muted-foreground">Resuelta</span>
             )}
           </div>
@@ -585,26 +566,6 @@ function BetCard({ bet, currency }: { bet: Bet; currency: string }) {
             >
               <ScanSearch className="w-4 h-4" />
             </button>
-            {bet.status === "pending" && (
-              <>
-                <button
-                  onClick={() => handleStatusUpdate("won")}
-                  disabled={updateBet.isPending}
-                  className="p-1.5 bg-emerald-500/20 text-emerald-500 hover:bg-emerald-500/30 rounded border border-emerald-500/30 transition-colors"
-                  title="Marcar como Ganada"
-                >
-                  <Check className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => handleStatusUpdate("lost")}
-                  disabled={updateBet.isPending}
-                  className="p-1.5 bg-red-500/20 text-red-500 hover:bg-red-500/30 rounded border border-red-500/30 transition-colors"
-                  title="Marcar como Perdida"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </>
-            )}
           </div>
         </div>
       </div>

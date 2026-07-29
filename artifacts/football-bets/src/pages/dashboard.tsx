@@ -1059,7 +1059,7 @@ function PredictionRow({ prediction, match, leagueName }: { prediction: Predicti
         <div className="flex items-center gap-2 mb-1">
           <span className="font-bold text-foreground text-sm">{prediction.market}</span>
           <span className="text-primary font-bold text-sm bg-primary/10 px-2 py-0.5 rounded">@{prediction.odds.toFixed(2)}</span>
-          <Badge variant={confidenceColor[prediction.confidence]} className="uppercase text-[10px]">{prediction.confidence}</Badge>
+          <Badge variant={confidenceColor[prediction.confidence]} className="uppercase text-[10px]">{{ high: "Alta", medium: "Media", low: "Baja" }[prediction.confidence]}</Badge>
         </div>
         <p className="text-sm font-medium text-foreground mb-1">{prediction.selection}</p>
         {prediction.reasoning && (
