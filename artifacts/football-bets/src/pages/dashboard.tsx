@@ -424,7 +424,7 @@ export default function Dashboard() {
             const rawMsg = typeof errData === 'object' ? errData?.error : undefined;
             const fallbackMsg = (nbaRadarMutation.error as Error)?.message ?? "";
             const isHtml = (s?: string) => s ? s.trimStart().startsWith("<") : false;
-            const errorMsg = rawMsg ?? (isHtml(fallbackMsg) ? "Error al conectar con el proveedor de datos. Verifica tu API key o intenta de nuevo más tarde." : fallbackMsg) || "Error inesperado.";
+            const errorMsg = (rawMsg ?? (isHtml(fallbackMsg) ? "Error al conectar con el proveedor de datos. Verifica tu API key o intenta de nuevo más tarde." : fallbackMsg)) || "Error inesperado.";
             if (isFreemiumBlocked) {
               return (
                 <div className="bg-card border border-primary/30 p-4 rounded-md flex items-start gap-3">
@@ -551,7 +551,7 @@ export default function Dashboard() {
         const rawMsg = typeof errData === 'object' ? errData?.error : undefined;
         const fallbackMsg = (radarMutation.error as Error)?.message ?? "";
         const isHtml = (s?: string) => s ? s.trimStart().startsWith("<") : false;
-        const errorMsg = rawMsg ?? (isHtml(fallbackMsg) ? "Error al conectar con el proveedor de datos. Verifica tu API key o intenta de nuevo más tarde." : fallbackMsg) || "Error inesperado. Inténtalo de nuevo.";
+        const errorMsg = (rawMsg ?? (isHtml(fallbackMsg) ? "Error al conectar con el proveedor de datos. Verifica tu API key o intenta de nuevo más tarde." : fallbackMsg)) || "Error inesperado. Inténtalo de nuevo.";
 
         if (isFreemiumBlocked) {
           return (
