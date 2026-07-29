@@ -2,11 +2,9 @@ import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import { clerkMiddleware } from "@clerk/express";
-import { publishableKeyFromHost } from "@clerk/shared/keys";
 import {
   CLERK_PROXY_PATH,
   clerkProxyMiddleware,
-  getClerkProxyHost,
 } from "./middlewares/clerkProxyMiddleware";
 import healthRouter from "./routes/health";
 import router from "./routes";
@@ -48,12 +46,10 @@ app.use("/api", healthRouter);
 // dev and prod with any Clerk custom domain
 app.use(
   process.env.CLERK_SECRET_KEY
-    ? clerkMiddleware((req) => ({
-        publishableKey: publishableKeyFromHost(
-          getClerkProxyHost(req) ?? "",
-          process.env.CLERK_PUBLISHABLE_KEY,
-        ),
-      }))
+    ? clerkMiddleware({
+        publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+        secretKey: process.env.CLERK_SECRET_KEY,
+      })
     : (_req, _res, next) => next(),
 );
 
