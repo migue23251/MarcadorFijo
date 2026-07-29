@@ -14,6 +14,7 @@ export const betsTable = pgTable("bets", {
   odds: doublePrecision("odds").notNull(),
   stake: doublePrecision("stake").notNull(),
   fixtureId: integer("fixture_id"), // API-Football fixture ID for exact result matching
+  confidence: text("confidence"), // "low" | "medium" | "high" — AI prediction confidence
   status: text("status").notNull().default("pending"), // "pending" | "won" | "lost" | "void"
   returnAmount: doublePrecision("return_amount"),
   finalScore: text("final_score"), // e.g. "2-1"

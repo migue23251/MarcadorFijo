@@ -401,8 +401,19 @@ function BetRow({ bet, currency }: { bet: Bet; currency: string }) {
           </div>
         </td>
         <td className="px-4 py-3">
-          <div className="flex flex-col">
-            <span className="font-semibold text-foreground text-sm">{bet.selection}</span>
+          <div className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-1.5">
+              <span className="font-semibold text-foreground text-sm">{bet.selection}</span>
+              {bet.confidence && (
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border uppercase ${
+                  bet.confidence === "high" ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/30" :
+                  bet.confidence === "medium" ? "bg-amber-500/15 text-amber-600 border-amber-500/30" :
+                  "bg-red-500/15 text-red-500 border-red-500/30"
+                }`}>
+                  {{ high: "Alta", medium: "Media", low: "Baja" }[bet.confidence]}
+                </span>
+              )}
+            </div>
             <span className="text-xs text-muted-foreground truncate max-w-[200px]">{bet.market}</span>
           </div>
         </td>
@@ -540,7 +551,18 @@ function BetCard({ bet, currency }: { bet: Bet; currency: string }) {
         <div className="flex items-end justify-between gap-2">
           <div className="min-w-0">
             <p className="text-xs text-muted-foreground truncate">{bet.market}</p>
-            <p className="font-semibold text-sm text-foreground">{bet.selection}</p>
+            <div className="flex items-center gap-1.5">
+              <p className="font-semibold text-sm text-foreground">{bet.selection}</p>
+              {bet.confidence && (
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border uppercase shrink-0 ${
+                  bet.confidence === "high" ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/30" :
+                  bet.confidence === "medium" ? "bg-amber-500/15 text-amber-600 border-amber-500/30" :
+                  "bg-red-500/15 text-red-500 border-red-500/30"
+                }`}>
+                  {{ high: "Alta", medium: "Media", low: "Baja" }[bet.confidence]}
+                </span>
+              )}
+            </div>
             {bet.status !== "pending" && (() => {
               const label = getFinalResultLabel(bet.market, bet.finalScore, bet.finalStats);
               return label ? (

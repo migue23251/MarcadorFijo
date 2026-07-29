@@ -251,6 +251,7 @@ export const ListBetsResponseItem = zod.object({
   "status": zod.enum(['pending', 'won', 'lost', 'void']),
   "returnAmount": zod.number().nullish(),
   "fixtureId": zod.number().nullish().describe('API-Football fixture ID for exact result matching'),
+  "confidence": zod.enum(['low', 'medium', 'high']).nullish(),
   "notes": zod.string().nullish(),
   "finalScore": zod.string().nullish().describe('Final goal score, e.g. "2-1"'),
   "finalStats": BetFinalStats.nullish().describe('Final match stats (corners, cards)'),
@@ -279,6 +280,7 @@ export const CreateBetBody = zod.object({
   "odds": zod.number(),
   "stake": zod.number(),
   "fixtureId": zod.number().optional().describe('API-Football fixture ID for exact result matching'),
+  "confidence": zod.enum(['low', 'medium', 'high']).optional(),
   "notes": zod.string().optional()
 })
 
@@ -295,6 +297,7 @@ export const CreateBetResponse = zod.object({
   "status": zod.enum(['pending', 'won', 'lost', 'void']),
   "returnAmount": zod.number().nullish(),
   "fixtureId": zod.number().nullish().describe('API-Football fixture ID for exact result matching'),
+  "confidence": zod.enum(['low', 'medium', 'high']).nullish(),
   "notes": zod.string().nullish(),
   "finalScore": zod.string().nullish().describe('Final goal score, e.g. "2-1"'),
   "finalStats": BetFinalStats.nullish().describe('Final match stats (corners, cards)'),

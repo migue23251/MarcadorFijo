@@ -1117,6 +1117,7 @@ function BetModalContent({ prediction, match, leagueName, onClose }: { predictio
         odds: oddsNum,
         stake: stakeNum,
         fixtureId: match.apiFootballId ?? undefined,
+        confidence: prediction.confidence,
         notes: notes || undefined
       }
     }, {

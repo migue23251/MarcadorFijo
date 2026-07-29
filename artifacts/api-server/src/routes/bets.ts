@@ -30,6 +30,7 @@ function serializeBet(bet: typeof betsTable.$inferSelect) {
     odds: bet.odds,
     stake: bet.stake,
     fixtureId: bet.fixtureId ?? null,
+    confidence: (bet.confidence as "low" | "medium" | "high" | null) ?? null,
     status: bet.status,
     returnAmount: bet.returnAmount,
     notes: bet.notes,
