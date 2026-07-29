@@ -13,6 +13,7 @@ import {
   enrichMatchForAnalysis,
   type ApiFootballMatch,
 } from "../lib/api-football";
+import { getTodayColombia } from "../lib/timezone";
 import { logger } from "../lib/logger";
 import {
   db,
@@ -143,7 +144,7 @@ router.post(
 
     try {
       const { homeTeam, awayTeam, league, kickoffTime } = parsed.data;
-      const date = new Date().toISOString().split("T")[0];
+      const date = getTodayColombia();
 
       // --- Early cache check: served to all users — no AI cost, no quota consumed ---
       const existingAnalysis = await db

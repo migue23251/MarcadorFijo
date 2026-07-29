@@ -1,5 +1,6 @@
 import { logger } from "./logger";
 import { fetchConRotacion } from "./fetchConRotacion";
+import { getTodayColombia, COLOMBIA_TZ } from "./timezone";
 import {
   db,
   radarCacheTable,
@@ -454,7 +455,7 @@ export async function enrichMatchForAnalysis(
   leagueId: number,
   fixtureId: number,
 ): Promise<MatchEnrichment> {
-  const date = new Date().toISOString().split("T")[0];
+  const date = getTodayColombia();
 
   const [homeStats, awayStats, injuries, h2h] = await Promise.all([
     fetchTeamStats(homeTeamId, leagueId, date).catch(() => null),
@@ -471,14 +472,14 @@ export async function enrichMatchForAnalysis(
 // ---------------------------------------------------------------------------
 
 async function fetchAllFixturesForDate(date: string): Promise<any[]> {
-  const raw = await apiFetch("/fixtures", { date, timezone: "UTC" });
+  const raw = await apiFetch("/fixtures", { date, timezone: COLOMBIA_TZ });
   return Array.isArray(raw) ? raw : [];
 }
 
 export async function getMatchesFromApiFootball(
   leagues?: string[],
 ): Promise<{ league: string; matches: ApiFootballMatch[] }[]> {
-  const date = new Date().toISOString().split("T")[0];
+  const date = getTodayColombia();
   const wantedLeagueIds = new Set(
     (leagues && leagues.length > 0 ? leagues : Object.keys(LEAGUE_ID_BY_NAME))
       .map((name) => LEAGUE_ID_BY_NAME[name])
