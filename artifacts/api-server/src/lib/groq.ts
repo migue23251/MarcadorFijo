@@ -16,6 +16,7 @@ PRINCIPIOS DE ANÁLISIS:
 5. Si tienes cuotas reales, calcula la probabilidad implícita (1/cuota) y compárala con tu estimación. Solo es value bet si tu prob. estimada supera la implícita por ≥5%.
 6. Confianza: "high" → ventaja estadística clara y sostenida (≥60% vs implícita ≤52%); "medium" → ventaja moderada; "low" → análisis especulativo o datos insuficientes.
 7. Cubre mercados distintos: resultado 1X2, total goles (Over/Under 2.5, 3.5), Ambos Anotan, córners si aplica, tarjetas si hay patrón claro.
+8. Cuando dispongas de datos de disparos a puerta y faltas en el H2H, úsalos: equipos con alto ratio disparos/goles en confrontaciones directas indican solidez ofensiva; alta media de faltas sugiere mercados de tarjetas; diferencia de posesión ≥10% es señal de dominancia territorial.
 8. Responde SIEMPRE en español y en formato JSON estricto sin markdown ni texto adicional.`;
 
 export interface AIPrediction {
@@ -47,6 +48,14 @@ function getClient(): Groq {
 
 function formatTeamStats(stats: TeamStats, label: string): string {
   const recentForm = stats.form.slice(-5) || "N/D";
+  const penaltyLine =
+    stats.penalties.total > 0
+      ? `  Penaltis: ${stats.penalties.scored}/${stats.penalties.total} convertidos${stats.penalties.missed > 0 ? ` (${stats.penalties.missed} fallados)` : ""}`
+      : null;
+  const streakLine =
+    stats.biggestWinStreak > 0
+      ? `  Racha máx. victorias consecutivas: ${stats.biggestWinStreak} pj | Mayor victoria local: ${stats.biggestWinHome} · visita: ${stats.biggestWinAway}`
+      : null;
   const lines = [
     `[${label}] — Temporada ${stats.season} | Forma últimos 5: ${recentForm}`,
     `  Registro general: ${stats.played.total} JJ | ${stats.wins.total}V ${stats.draws.total}E ${stats.losses.total}D`,
@@ -56,6 +65,8 @@ function formatTeamStats(stats: TeamStats, label: string): string {
     `  Goles concedidos: ${stats.goalsAgainst.total}/pj (local ${stats.goalsAgainst.home}/pj · visita ${stats.goalsAgainst.away}/pj)`,
     `  Valla invicta: ${stats.cleanSheets.total} (${stats.cleanSheets.home} local · ${stats.cleanSheets.away} visita) | Sin marcar: ${stats.failedToScore.total}`,
     `  Disciplina: ${stats.yellowCards} amarillas · ${stats.redCards} rojas en la temporada`,
+    ...(penaltyLine ? [penaltyLine] : []),
+    ...(streakLine ? [streakLine] : []),
   ];
   return lines.join("\n");
 }
@@ -96,7 +107,10 @@ function formatH2H(h2h: H2HRecord[]): string {
           : m.winner === "away"
             ? `✓ ${m.awayTeam}`
             : "Empate";
-      return `  ${m.date} | ${m.homeTeam} vs ${m.awayTeam} | ${score} | ${winnerLabel}`;
+      const statsLine = m.stats
+        ? ` | Disparos portería: ${m.stats.home.shotsOnGoal}-${m.stats.away.shotsOnGoal} (total: ${m.stats.home.totalShots}-${m.stats.away.totalShots}) | Faltas: ${m.stats.home.fouls}-${m.stats.away.fouls} | Córners: ${m.stats.home.corners}-${m.stats.away.corners} | Posesión: ${m.stats.home.possession}%-${m.stats.away.possession}%`
+        : "";
+      return `  ${m.date} | ${m.homeTeam} vs ${m.awayTeam} | ${score} | ${winnerLabel}${statsLine}`;
     })
     .join("\n");
 }

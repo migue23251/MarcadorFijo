@@ -8,6 +8,7 @@ import {
   teamStatsCacheTable,
   injuriesCacheTable,
   h2hCacheTable,
+  fixtureStatsCacheTable,
 } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 
@@ -97,6 +98,28 @@ export interface TeamStats {
   failedToScore: { home: number; away: number; total: number };
   yellowCards: number;
   redCards: number;
+  /** Penalty stats for the season */
+  penalties: { scored: number; missed: number; total: number };
+  /** Longest consecutive win streak this season */
+  biggestWinStreak: number;
+  /** Biggest home/away wins (e.g. "3-0") */
+  biggestWinHome: string;
+  biggestWinAway: string;
+}
+
+/** Per-match statistics from /fixtures/statistics */
+export interface FixtureStats {
+  shotsOnGoal: number;
+  shotsOffGoal: number;
+  totalShots: number;
+  fouls: number;
+  corners: number;
+  offsides: number;
+  /** Ball possession percentage (0–100) */
+  possession: number;
+  saves: number;
+  yellowCards: number;
+  redCards: number;
 }
 
 export interface InjuryRecord {
@@ -113,6 +136,10 @@ export interface H2HRecord {
   scoreHome: number | null;
   scoreAway: number | null;
   winner: "home" | "away" | "draw";
+  /** API-Football fixture ID — used to fetch per-match statistics */
+  fixtureId?: number;
+  /** Detailed match stats (shots, fouls, corners, possession) — null if unavailable */
+  stats?: { home: FixtureStats; away: FixtureStats } | null;
 }
 
 export interface MatchEnrichment {
@@ -284,6 +311,13 @@ async function fetchTeamStats(
     0,
   ) as number;
 
+  const penaltyScored = (raw.penalty?.scored?.total ?? 0) as number;
+  const penaltyMissed = (raw.penalty?.missed?.total ?? 0) as number;
+  const penaltyTotal = (raw.penalty?.total?.total ?? penaltyScored + penaltyMissed) as number;
+  const biggestWinStreak = (raw.biggest?.streak?.wins ?? 0) as number;
+  const biggestWinHome = (raw.biggest?.wins?.home as string | null) ?? "N/D";
+  const biggestWinAway = (raw.biggest?.wins?.away as string | null) ?? "N/D";
+
   const stats: TeamStats = {
     teamName: raw.team?.name ?? "",
     season,
@@ -298,6 +332,10 @@ async function fetchTeamStats(
     failedToScore: raw.failed_to_score ?? { home: 0, away: 0, total: 0 },
     yellowCards,
     redCards,
+    penalties: { scored: penaltyScored, missed: penaltyMissed, total: penaltyTotal },
+    biggestWinStreak,
+    biggestWinHome,
+    biggestWinAway,
   };
 
   try {
@@ -370,6 +408,81 @@ async function fetchInjuries(
 }
 
 // ---------------------------------------------------------------------------
+// Fixture statistics — /fixtures/statistics
+// ---------------------------------------------------------------------------
+
+function parseFixtureStats(teamData: any): FixtureStats {
+  const statsMap: Record<string, any> = {};
+  for (const s of (teamData?.statistics ?? [])) {
+    if (s?.type) statsMap[s.type] = s.value;
+  }
+  const num = (v: any): number => {
+    if (v === null || v === undefined) return 0;
+    if (typeof v === "number") return v;
+    const n = parseInt(String(v), 10);
+    return isNaN(n) ? 0 : n;
+  };
+  const pct = (v: any): number => {
+    if (!v) return 0;
+    const n = parseInt(String(v).replace("%", ""), 10);
+    return isNaN(n) ? 0 : n;
+  };
+  return {
+    shotsOnGoal: num(statsMap["Shots on Goal"]),
+    shotsOffGoal: num(statsMap["Shots off Goal"]),
+    totalShots: num(statsMap["Total Shots"]),
+    fouls: num(statsMap["Fouls"]),
+    corners: num(statsMap["Corner Kicks"]),
+    offsides: num(statsMap["Offsides"]),
+    possession: pct(statsMap["Ball Possession"]),
+    saves: num(statsMap["Goalkeeper Saves"]),
+    yellowCards: num(statsMap["Yellow Cards"]),
+    redCards: num(statsMap["Red Cards"]),
+  };
+}
+
+async function fetchFixtureStatistics(
+  fixtureId: number,
+): Promise<{ home: FixtureStats; away: FixtureStats } | null> {
+  const cached = await db
+    .select()
+    .from(fixtureStatsCacheTable)
+    .where(eq(fixtureStatsCacheTable.fixtureId, fixtureId))
+    .limit(1);
+
+  if (cached.length > 0) {
+    logger.info({ fixtureId }, "Fixture stats served from cache");
+    return JSON.parse(cached[0].result) as { home: FixtureStats; away: FixtureStats };
+  }
+
+  logger.info({ fixtureId }, "Fetching fixture statistics from API-Football");
+
+  let raw: any[];
+  try {
+    raw = await apiFetch("/fixtures/statistics", { fixture: fixtureId });
+  } catch (err) {
+    logger.warn({ err, fixtureId }, "Failed to fetch fixture statistics");
+    return null;
+  }
+
+  if (!Array.isArray(raw) || raw.length < 2) return null;
+
+  const stats = { home: parseFixtureStats(raw[0]), away: parseFixtureStats(raw[1]) };
+
+  try {
+    await db
+      .insert(fixtureStatsCacheTable)
+      .values({ fixtureId, result: JSON.stringify(stats) })
+      .onConflictDoNothing();
+    logger.info({ fixtureId }, "Fixture stats cached in DB");
+  } catch (err) {
+    logger.warn({ err }, "Failed to cache fixture stats");
+  }
+
+  return stats;
+}
+
+// ---------------------------------------------------------------------------
 // Head-to-head — /fixtures/headtohead
 // ---------------------------------------------------------------------------
 
@@ -414,7 +527,7 @@ async function fetchH2H(
 
   if (!Array.isArray(raw)) return null;
 
-  const h2h: H2HRecord[] = raw.slice(0, 5).map((f: any) => {
+  const h2hBase = raw.slice(0, 5).map((f: any) => {
     const scoreHome = f.goals?.home ?? null;
     const scoreAway = f.goals?.away ?? null;
     let winner: "home" | "away" | "draw" = "draw";
@@ -429,8 +542,23 @@ async function fetchH2H(
       scoreHome,
       scoreAway,
       winner,
+      fixtureId: (f.fixture?.id as number) ?? undefined,
     };
   });
+
+  // Enrich each H2H match with per-match statistics (shots, fouls, corners, possession)
+  const statsResults = await Promise.all(
+    h2hBase.map((m) =>
+      m.fixtureId
+        ? fetchFixtureStatistics(m.fixtureId).catch(() => null)
+        : Promise.resolve(null),
+    ),
+  );
+
+  const h2h: H2HRecord[] = h2hBase.map((m, i) => ({
+    ...m,
+    stats: statsResults[i] ?? null,
+  }));
 
   try {
     await db

@@ -153,3 +153,21 @@ export const h2hCacheTable = pgTable(
 );
 
 export type H2HCache = typeof h2hCacheTable.$inferSelect;
+
+/**
+ * Fixture statistics cache — one entry per fixture ID (permanent once a match is played).
+ * Covers shots on goal, fouls, corners, possession, saves from /fixtures/statistics.
+ */
+export const fixtureStatsCacheTable = pgTable(
+  "fixture_stats_cache",
+  {
+    id: serial("id").primaryKey(),
+    fixtureId: integer("fixture_id").notNull(),
+    /** JSON { home: FixtureStats; away: FixtureStats } */
+    result: text("result").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("fixture_stats_cache_fixture_id_idx").on(t.fixtureId)],
+);
+
+export type FixtureStatsCache = typeof fixtureStatsCacheTable.$inferSelect;
