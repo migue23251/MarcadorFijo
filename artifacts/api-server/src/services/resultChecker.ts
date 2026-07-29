@@ -34,6 +34,15 @@ interface FixtureStats {
   awayRedCards: number;
   /** Todas las amarillas + rojas de ambos equipos */
   totalCards: number;
+  homeShotsOnGoal: number;
+  awayShotsOnGoal: number;
+  totalShotsOnGoal: number;
+  homeTotalShots: number;
+  awayTotalShots: number;
+  totalShots: number;
+  homeFouls: number;
+  awayFouls: number;
+  totalFouls: number;
 }
 
 interface FixtureResult {
@@ -88,7 +97,12 @@ function requiresStats(market: string): boolean {
     m.includes("tarjeta") ||
     m.includes("card") ||
     m.includes("amarilla") ||
-    m.includes("roja")
+    m.includes("roja") ||
+    m.includes("falta") ||
+    m.includes("foul") ||
+    m.includes("disparo") ||
+    m.includes("tiro") ||
+    m.includes("shot")
   );
 }
 
@@ -212,6 +226,12 @@ async function loadFixtureStats(
     const awayRed = getStat(awayStats, "Red Cards");
     const homeCorners = getStat(homeStats, "Corner Kicks");
     const awayCorners = getStat(awayStats, "Corner Kicks");
+    const homeShotsOnGoal = getStat(homeStats, "Shots on Goal");
+    const awayShotsOnGoal = getStat(awayStats, "Shots on Goal");
+    const homeTotalShots = getStat(homeStats, "Total Shots");
+    const awayTotalShots = getStat(awayStats, "Total Shots");
+    const homeFouls = getStat(homeStats, "Fouls");
+    const awayFouls = getStat(awayStats, "Fouls");
 
     const stats: FixtureStats = {
       homeCorners,
@@ -222,6 +242,15 @@ async function loadFixtureStats(
       homeRedCards: homeRed,
       awayRedCards: awayRed,
       totalCards: homeYellow + awayYellow + homeRed + awayRed,
+      homeShotsOnGoal,
+      awayShotsOnGoal,
+      totalShotsOnGoal: homeShotsOnGoal + awayShotsOnGoal,
+      homeTotalShots,
+      awayTotalShots,
+      totalShots: homeTotalShots + awayTotalShots,
+      homeFouls,
+      awayFouls,
+      totalFouls: homeFouls + awayFouls,
     };
 
     fixture.stats = stats;
@@ -386,6 +415,74 @@ function evaluateBet(
     return isOver
       ? stats.totalCards > line ? "won" : "lost"
       : stats.totalCards < line ? "won" : "lost";
+  }
+
+  // -------------------------------------------------------------------------
+  // Disparos a puerta / Tiros a puerta / Shots on goal
+  // -------------------------------------------------------------------------
+  if (
+    m.includes("disparo") ||
+    m.includes("tiro") ||
+    m.includes("shot")
+  ) {
+    if (!stats) {
+      logger.warn({ market, selection }, "Apuesta de disparos sin estadísticas disponibles → void");
+      return "void";
+    }
+
+    const isHome = s.includes("local") || s.includes("home");
+    const isAway = s.includes("visitante") || s.includes("away");
+    const isOnGoal = m.includes("puerta") || m.includes("portería") || m.includes("on goal");
+
+    const lineMatch = s.match(/(\d+(?:\.\d+)?)/);
+    if (!lineMatch) return "void";
+    const line = parseFloat(lineMatch[1]);
+    const isOver = s.includes("más") || s.includes("over") || s.startsWith("+");
+
+    if (isHome) {
+      const val = isOnGoal ? stats.homeShotsOnGoal : stats.homeTotalShots;
+      return isOver ? val > line ? "won" : "lost" : val < line ? "won" : "lost";
+    }
+    if (isAway) {
+      const val = isOnGoal ? stats.awayShotsOnGoal : stats.awayTotalShots;
+      return isOver ? val > line ? "won" : "lost" : val < line ? "won" : "lost";
+    }
+    // Total ambos equipos
+    const val = isOnGoal ? stats.totalShotsOnGoal : stats.totalShots;
+    return isOver ? val > line ? "won" : "lost" : val < line ? "won" : "lost";
+  }
+
+  // -------------------------------------------------------------------------
+  // Faltas / Fouls
+  // -------------------------------------------------------------------------
+  if (m.includes("falta") || m.includes("foul")) {
+    if (!stats) {
+      logger.warn({ market, selection }, "Apuesta de faltas sin estadísticas disponibles → void");
+      return "void";
+    }
+
+    const isHome = s.includes("local") || s.includes("home");
+    const isAway = s.includes("visitante") || s.includes("away");
+
+    const lineMatch = s.match(/(\d+(?:\.\d+)?)/);
+    if (!lineMatch) return "void";
+    const line = parseFloat(lineMatch[1]);
+    const isOver = s.includes("más") || s.includes("over") || s.startsWith("+");
+
+    if (isHome) {
+      return isOver
+        ? stats.homeFouls > line ? "won" : "lost"
+        : stats.homeFouls < line ? "won" : "lost";
+    }
+    if (isAway) {
+      return isOver
+        ? stats.awayFouls > line ? "won" : "lost"
+        : stats.awayFouls < line ? "won" : "lost";
+    }
+    // Total ambos equipos
+    return isOver
+      ? stats.totalFouls > line ? "won" : "lost"
+      : stats.totalFouls < line ? "won" : "lost";
   }
 
   // -------------------------------------------------------------------------
@@ -620,7 +717,7 @@ export async function verificarResultadosDelDia(): Promise<VerificationSummary> 
       const returnAmount =
         outcome === "won" ? parseFloat((bet.stake * bet.odds).toFixed(2)) : 0;
 
-      // Persist corner/card stats so the frontend can display them
+      // Persist stats so the frontend can display them
       const finalStats = stats ? JSON.stringify({
         homeCorners: stats.homeCorners,
         awayCorners: stats.awayCorners,
@@ -630,6 +727,15 @@ export async function verificarResultadosDelDia(): Promise<VerificationSummary> 
         homeRedCards: stats.homeRedCards,
         awayRedCards: stats.awayRedCards,
         totalCards: stats.totalCards,
+        homeShotsOnGoal: stats.homeShotsOnGoal,
+        awayShotsOnGoal: stats.awayShotsOnGoal,
+        totalShotsOnGoal: stats.totalShotsOnGoal,
+        homeTotalShots: stats.homeTotalShots,
+        awayTotalShots: stats.awayTotalShots,
+        totalShots: stats.totalShots,
+        homeFouls: stats.homeFouls,
+        awayFouls: stats.awayFouls,
+        totalFouls: stats.totalFouls,
       }) : null;
 
       await db
