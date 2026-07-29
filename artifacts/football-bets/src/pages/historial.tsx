@@ -29,6 +29,7 @@ import {
   Loader2,
   ShieldAlert,
 } from "lucide-react";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
@@ -202,7 +203,6 @@ export default function Historial() {
                     <tr>
                       <th className="px-4 py-3 font-semibold">Fecha/Partido</th>
                       <th className="px-4 py-3 font-semibold">Mercado/Selección</th>
-                      <th className="px-4 py-3 font-semibold">Resultado</th>
                       <th className="px-4 py-3 font-semibold text-right">Cuota</th>
                       <th className="px-4 py-3 font-semibold text-right">Monto</th>
                       <th className="px-4 py-3 font-semibold text-center">Estado</th>
@@ -417,20 +417,6 @@ function BetRow({ bet, currency }: { bet: Bet; currency: string }) {
             <span className="text-xs text-muted-foreground truncate max-w-[200px]">{bet.market}</span>
           </div>
         </td>
-        <td className="px-4 py-3">
-          {bet.status !== "pending" ? (() => {
-            const label = getFinalResultLabel(bet.market, bet.finalScore, bet.finalStats);
-            return label ? (
-              <span className="text-xs font-semibold text-foreground bg-secondary px-2 py-1 rounded">
-                {label}
-              </span>
-            ) : (
-              <span className="text-xs text-muted-foreground">—</span>
-            );
-          })() : (
-            <span className="text-xs text-muted-foreground">—</span>
-          )}
-        </td>
         <td className="px-4 py-3 text-right">
           <span className="font-bold text-primary bg-primary/10 px-2 py-0.5 rounded text-sm">
             {bet.odds.toFixed(2)}
@@ -438,18 +424,33 @@ function BetRow({ bet, currency }: { bet: Bet; currency: string }) {
         </td>
         <td className="px-4 py-3 text-right font-medium text-foreground">{formatCurrency(bet.stake, currency)}</td>
         <td className="px-4 py-3 text-center">
-          <span
-            className={`px-2 py-1 text-xs font-semibold rounded-full border inline-flex items-center ${statusColors[bet.status]}`}
-          >
-            {statusIcons[bet.status]}
-            {bet.status === "pending"
-              ? "Pendiente"
-              : bet.status === "won"
-                ? "Ganada"
-                : bet.status === "lost"
-                  ? "Perdida"
-                  : "Anulada"}
-          </span>
+          {(() => {
+            const resultLabel = bet.status !== "pending"
+              ? getFinalResultLabel(bet.market, bet.finalScore, bet.finalStats)
+              : null;
+            const badge = (
+              <span
+                className={`px-2 py-1 text-xs font-semibold rounded-full border inline-flex items-center ${statusColors[bet.status]} ${resultLabel ? "cursor-help" : ""}`}
+              >
+                {statusIcons[bet.status]}
+                {bet.status === "pending"
+                  ? "Pendiente"
+                  : bet.status === "won"
+                    ? "Ganada"
+                    : bet.status === "lost"
+                      ? "Perdida"
+                      : "Anulada"}
+              </span>
+            );
+            return resultLabel ? (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>{badge}</TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">{resultLabel}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : badge;
+          })()}
         </td>
         <td className="px-4 py-3 text-right font-bold">
           {bet.status === "won" ? (
