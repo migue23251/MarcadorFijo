@@ -747,9 +747,12 @@ function AnalysisContent({
         <div className="space-y-3">
           {analysis.predictions.map((pred) => {
             const conf = confidenceConfig[pred.confidence] ?? confidenceConfig.low;
-            const isUserBet =
-              pred.selection.toLowerCase().includes(userSelection.toLowerCase()) ||
-              pred.market.toLowerCase().includes(userMarket.toLowerCase());
+            const normalize = (s: string) => s.toLowerCase().trim();
+            const selMatch = normalize(pred.selection) === normalize(userSelection);
+            const mktMatch =
+              normalize(pred.market).includes(normalize(userMarket)) ||
+              normalize(userMarket).includes(normalize(pred.market));
+            const isUserBet = selMatch && mktMatch;
 
             return (
               <div
