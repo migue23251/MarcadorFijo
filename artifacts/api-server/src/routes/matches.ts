@@ -120,7 +120,7 @@ router.post(
       res.json(results);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Error al obtener partidos";
-      res.status(502).json({ error: message });
+      res.status(422).json({ error: message });
     }
   },
 );
@@ -272,7 +272,7 @@ router.post(
       res.json(analysis);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Error al analizar el partido";
-      res.status(502).json({ error: message });
+      res.status(422).json({ error: message });
     }
   },
 );

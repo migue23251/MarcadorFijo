@@ -56,7 +56,7 @@ router.post(
       logger.error({ err }, "Basketball radar error");
       const message =
         err instanceof Error ? err.message : "Error al obtener partidos de baloncesto";
-      res.status(502).json({ error: message });
+      res.status(422).json({ error: message });
     }
   },
 );
