@@ -278,4 +278,105 @@ router.post(
   },
 );
 
+// GET /matches/parlay-of-the-day
+// Reads today's analysis cache and builds a parlay from all high-confidence picks
+// (best pick per match to avoid correlated legs).
+router.get(
+  "/matches/parlay-of-the-day",
+  requireAuth,
+  requireSubscription,
+  async (req, res): Promise<void> => {
+    const date = getTodayColombia();
+
+    // Load all of today's cached analyses
+    const analyses = await db
+      .select()
+      .from(analysisCacheTable)
+      .where(eq(analysisCacheTable.date, date));
+
+    if (analyses.length === 0) {
+      res.json({ date, legs: [], combinedOdds: 1, totalAnalyzed: 0 });
+      return;
+    }
+
+    // Pre-load radar fixture list once for kickoffTime lookups
+    let radarFixtures: ApiFootballMatch[] = [];
+    try {
+      const [radarRow] = await db
+        .select()
+        .from(radarCacheTable)
+        .where(and(eq(radarCacheTable.date, date), eq(radarCacheTable.league, "af_all")))
+        .limit(1);
+      if (radarRow) radarFixtures = JSON.parse(radarRow.result) as ApiFootballMatch[];
+    } catch { /* non-fatal */ }
+
+    const getKickoffTime = (homeTeam: string, awayTeam: string): string | null => {
+      const m = radarFixtures.find(
+        (f) =>
+          f.homeTeam.toLowerCase() === homeTeam.toLowerCase() &&
+          f.awayTeam.toLowerCase() === awayTeam.toLowerCase(),
+      );
+      return m?.kickoffTime ?? null;
+    };
+
+    type ParlayLeg = {
+      homeTeam: string;
+      awayTeam: string;
+      league: string;
+      kickoffTime: string | null;
+      market: string;
+      selection: string;
+      odds: number;
+      reasoning: string | null;
+    };
+
+    const legs: ParlayLeg[] = [];
+
+    for (const row of analyses) {
+      let analysis: any;
+      try { analysis = JSON.parse(row.result); } catch { continue; }
+
+      const highPreds: any[] = (analysis.predictions ?? []).filter(
+        (p: any) => p.confidence === "high" && typeof p.odds === "number" && p.odds > 1,
+      );
+      if (highPreds.length === 0) continue;
+
+      // Take the highest-odds high-confidence pick from this match
+      // (one pick per match avoids correlated legs)
+      const best = highPreds.reduce((a: any, b: any) => (b.odds > a.odds ? b : a));
+
+      legs.push({
+        homeTeam: row.homeTeam,
+        awayTeam: row.awayTeam,
+        league: row.league,
+        kickoffTime: getKickoffTime(row.homeTeam, row.awayTeam),
+        market: best.market,
+        selection: best.selection,
+        odds: typeof best.odds === "string" ? parseFloat(best.odds) : best.odds,
+        reasoning: best.reasoning ?? null,
+      });
+    }
+
+    // Sort by kickoff time ascending, then by odds descending as tiebreaker
+    legs.sort((a, b) => {
+      if (a.kickoffTime && b.kickoffTime) {
+        const diff = new Date(a.kickoffTime).getTime() - new Date(b.kickoffTime).getTime();
+        if (diff !== 0) return diff;
+      }
+      return b.odds - a.odds;
+    });
+
+    // Cap at 6 legs to keep the parlay reasonable
+    const parlayLegs = legs.slice(0, 6);
+    const combinedOdds = parlayLegs.reduce((acc, l) => acc * l.odds, 1);
+
+    res.json({
+      date,
+      legs: parlayLegs,
+      combinedOdds: parseFloat(combinedOdds.toFixed(2)),
+      totalAnalyzed: analyses.length,
+    });
+  },
+);
+
 export default router;

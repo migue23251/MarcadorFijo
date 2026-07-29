@@ -13,7 +13,7 @@ import {
   Prediction
 } from "@workspace/api-client-react";
 import { useMutation } from "@tanstack/react-query";
-import { Radar, AlertTriangle, ChevronDown, Check, Loader2, Target, Info, Trophy, Clock, RefreshCw, Activity, Crown, Zap, X } from "lucide-react";
+import { Radar, AlertTriangle, ChevronDown, Check, Loader2, Target, Info, Trophy, Clock, RefreshCw, Activity, Crown, Zap, X, TrendingUp } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -186,12 +186,201 @@ function MultiSelectDropdown({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Parlay del día
+// ---------------------------------------------------------------------------
+
+interface ParlayLeg {
+  homeTeam: string;
+  awayTeam: string;
+  league: string;
+  kickoffTime: string | null;
+  market: string;
+  selection: string;
+  odds: number;
+  reasoning: string | null;
+}
+
+interface ParlayData {
+  date: string;
+  legs: ParlayLeg[];
+  combinedOdds: number;
+  totalAnalyzed: number;
+}
+
+function ParlayDelDia({
+  hasAnalyzedMatches,
+  onBetLeg,
+}: {
+  hasAnalyzedMatches: boolean;
+  onBetLeg: (leg: ParlayLeg) => void;
+}) {
+  const [parlay, setParlay] = useState<ParlayData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fetchedRef = useRef(false);
+
+  const fetchParlay = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/matches/parlay-of-the-day");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error ?? `Error ${res.status}`);
+      }
+      setParlay(await res.json());
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Auto-fetch once when there are analyzed matches
+  useEffect(() => {
+    if (hasAnalyzedMatches && !fetchedRef.current) {
+      fetchedRef.current = true;
+      fetchParlay();
+    }
+  }, [hasAnalyzedMatches, fetchParlay]);
+
+  if (!hasAnalyzedMatches && !parlay && !loading) return null;
+
+  const hasLegs = (parlay?.legs.length ?? 0) > 0;
+
+  return (
+    <div className="rounded-xl border border-primary/30 bg-primary/5 overflow-hidden animate-in fade-in duration-500">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-primary/20">
+        <div className="flex items-center gap-2.5">
+          <div className="p-1.5 rounded-md bg-primary/15">
+            <TrendingUp className="w-4 h-4 text-primary" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-foreground">Parlay del Día</h3>
+            <p className="text-xs text-muted-foreground">
+              {loading
+                ? "Calculando picks de alta confianza..."
+                : parlay
+                  ? `${parlay.totalAnalyzed} partido${parlay.totalAnalyzed !== 1 ? "s" : ""} analizados · ${parlay.legs.length} pick${parlay.legs.length !== 1 ? "s" : ""} alta confianza`
+                  : "Picks con confianza alta de todos los partidos analizados hoy"}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {hasLegs && (
+            <div className="text-right">
+              <div className="text-xs text-muted-foreground">Cuota combinada</div>
+              <div className="text-lg font-black text-primary tabular-nums">
+                @{parlay!.combinedOdds.toFixed(2)}
+              </div>
+            </div>
+          )}
+          <button
+            onClick={() => { fetchedRef.current = true; fetchParlay(); }}
+            disabled={loading}
+            className="p-1.5 rounded-md hover:bg-primary/10 transition-colors text-muted-foreground hover:text-primary disabled:opacity-40"
+            title="Actualizar parlay"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+          </button>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="p-4 space-y-2">
+        {/* Loading skeleton */}
+        {loading && (
+          <div className="space-y-2">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="h-14 bg-primary/10 animate-pulse rounded-lg" />
+            ))}
+          </div>
+        )}
+
+        {/* Error */}
+        {error && !loading && (
+          <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!loading && !error && parlay && !hasLegs && (
+          <p className="text-sm text-muted-foreground text-center py-4">
+            Aún no hay picks de alta confianza. Analiza más partidos para generar el parlay.
+          </p>
+        )}
+
+        {/* Picks */}
+        {!loading && hasLegs && parlay!.legs.map((leg, idx) => {
+          const kickoff = leg.kickoffTime
+            ? (() => { const d = new Date(leg.kickoffTime!); return isNaN(d.getTime()) ? null : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); })()
+            : null;
+          return (
+            <div
+              key={idx}
+              className="flex items-center justify-between gap-3 bg-background/60 border border-border/60 rounded-lg px-4 py-3"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-primary/15 text-primary text-[11px] font-bold flex items-center justify-center">
+                  {idx + 1}
+                </span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-semibold text-foreground truncate">
+                      {leg.homeTeam} vs {leg.awayTeam}
+                    </span>
+                    {kickoff && (
+                      <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded shrink-0">
+                        {kickoff}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                    <span className="text-xs text-muted-foreground">{leg.league}</span>
+                    <span className="text-muted-foreground/40">·</span>
+                    <span className="text-xs font-medium text-foreground">{leg.market}</span>
+                    <span className="text-muted-foreground/40">→</span>
+                    <span className="text-xs font-bold text-primary">{leg.selection}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-sm font-bold text-primary bg-primary/10 px-2 py-1 rounded tabular-nums">
+                  @{leg.odds.toFixed(2)}
+                </span>
+                <button
+                  onClick={() => onBetLeg(leg)}
+                  className="px-3 py-1 bg-primary text-primary-foreground text-xs font-semibold rounded hover:bg-primary/90 transition-colors"
+                >
+                  Apostar
+                </button>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Disclaimer */}
+        {!loading && hasLegs && (
+          <p className="text-[11px] text-muted-foreground/60 pt-1 text-center">
+            Picks independientes generados por IA · Un partido por selección · Cuota estimada sin comisión de casa
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const [conversionModalOpen, setConversionModalOpen] = useState(false);
   const [sport, setSport] = useState<"futbol" | "baloncesto">("futbol");
+  const [parlayBetTarget, setParlayBetTarget] = useState<ParlayLeg | null>(null);
 
   const { data: me } = useGetMe({ query: { queryKey: getGetMeQueryKey() } });
 
@@ -614,6 +803,17 @@ export default function Dashboard() {
               )}
             </div>
 
+            {/* Parlay del Día */}
+            {(() => {
+              const hasAnalyzed = results.some(l => l.matches.some(m => m.hasAnalysis));
+              return (
+                <ParlayDelDia
+                  hasAnalyzedMatches={hasAnalyzed}
+                  onBetLeg={setParlayBetTarget}
+                />
+              );
+            })()}
+
             {results.length === 0 ? (
               <p className="text-muted-foreground text-center py-12 bg-card rounded-md border border-border">No se encontraron partidos hoy en las competiciones seleccionadas.</p>
             ) : (
@@ -646,6 +846,46 @@ export default function Dashboard() {
         onClose={() => setConversionModalOpen(false)}
         onNavigate={() => { setConversionModalOpen(false); setLocation("/configuracion"); }}
       />
+
+      {/* Parlay leg bet modal */}
+      {parlayBetTarget && (() => {
+        const leg = parlayBetTarget;
+        const fakeMatch: Match = {
+          id: `parlay-${leg.homeTeam}-${leg.awayTeam}`,
+          apiFootballId: null,
+          homeTeam: leg.homeTeam,
+          awayTeam: leg.awayTeam,
+          league: leg.league,
+          kickoffTime: leg.kickoffTime ?? new Date().toISOString(),
+          stadium: null,
+          status: "scheduled",
+          score: null,
+          hasAnalysis: true,
+        };
+        const fakePrediction: Prediction = {
+          id: "parlay-leg",
+          market: leg.market,
+          selection: leg.selection,
+          odds: leg.odds,
+          confidence: "high",
+          reasoning: leg.reasoning ?? undefined,
+        };
+        return (
+          <Dialog.Root open={true} onOpenChange={(open) => { if (!open) setParlayBetTarget(null); }}>
+            <Dialog.Portal>
+              <Dialog.Overlay className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 animate-in fade-in" />
+              <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-2rem)] max-w-md bg-card border border-border rounded-xl shadow-2xl z-50 p-4 sm:p-6 animate-in fade-in zoom-in-95 duration-200 max-h-[90dvh] overflow-y-auto">
+                <BetModalContent
+                  prediction={fakePrediction}
+                  match={fakeMatch}
+                  leagueName={leg.league}
+                  onClose={() => setParlayBetTarget(null)}
+                />
+              </Dialog.Content>
+            </Dialog.Portal>
+          </Dialog.Root>
+        );
+      })()}
     </div>
   );
 }
