@@ -34,6 +34,63 @@ import { Link } from "wouter";
 
 const PAGE_SIZE = 15;
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns a human-readable final result label based on the market type.
+ * finalScore is always stored as "home-away" goals (e.g. "2-1").
+ */
+function getFinalResultLabel(market: string, finalScore: string | null | undefined): string | null {
+  if (!finalScore || finalScore === "—") return null;
+
+  const m = market.toLowerCase();
+
+  const parts = finalScore.split("-");
+  if (parts.length !== 2) return finalScore;
+  const home = parseInt(parts[0], 10);
+  const away = parseInt(parts[1], 10);
+  if (isNaN(home) || isNaN(away)) return finalScore;
+
+  // Over / Under goles → mostrar total de goles
+  if (
+    m.includes("over") || m.includes("under") ||
+    m.includes("más") || m.includes("menos") ||
+    m.includes("total gol") || m.includes("goles")
+  ) {
+    const total = home + away;
+    return `${total} ${total === 1 ? "gol" : "goles"} (${home}–${away})`;
+  }
+
+  // BTTS / Ambos Anotan
+  if (
+    m.includes("btts") || m.includes("ambos") ||
+    m.includes("both teams") || m.includes("anotan") || m.includes("gg/ng")
+  ) {
+    const bothScored = home > 0 && away > 0;
+    return bothScored
+      ? `Ambos anotaron (${home}–${away})`
+      : `No anotaron ambos (${home}–${away})`;
+  }
+
+  // Córners — el conteo no se almacena, solo el score de goles
+  if (m.includes("córner") || m.includes("corner") || m.includes("esquina")) {
+    return `Goles: ${home}–${away} · Córners no almacenados`;
+  }
+
+  // Tarjetas — ídem
+  if (
+    m.includes("tarjeta") || m.includes("card") ||
+    m.includes("amarilla") || m.includes("roja") || m.includes("booking")
+  ) {
+    return `Goles: ${home}–${away} · Tarjetas no almacenadas`;
+  }
+
+  // 1X2, hándicap asiático/europeo y cualquier otro → mostrar score
+  return `${home}–${away}`;
+}
+
 export default function Historial() {
   const [statusFilter, setStatusFilter] = useState<ListBetsStatus | undefined>(undefined);
   const [page, setPage] = useState(1);
@@ -327,6 +384,14 @@ function BetRow({ bet, currency }: { bet: Bet; currency: string }) {
           <div className="flex flex-col">
             <span className="font-semibold text-foreground text-sm">{bet.selection}</span>
             <span className="text-xs text-muted-foreground truncate max-w-[200px]">{bet.market}</span>
+            {bet.status !== "pending" && (() => {
+              const label = getFinalResultLabel(bet.market, bet.finalScore);
+              return label ? (
+                <span className="text-xs font-medium text-primary/80 mt-0.5">
+                  ✦ {label}
+                </span>
+              ) : null;
+            })()}
           </div>
         </td>
         <td className="px-4 py-3 text-right">
@@ -469,6 +534,12 @@ function BetCard({ bet, currency }: { bet: Bet; currency: string }) {
           <div className="min-w-0">
             <p className="text-xs text-muted-foreground truncate">{bet.market}</p>
             <p className="font-semibold text-sm text-foreground">{bet.selection}</p>
+            {bet.status !== "pending" && (() => {
+              const label = getFinalResultLabel(bet.market, bet.finalScore);
+              return label ? (
+                <p className="text-xs font-medium text-primary/80 mt-0.5">✦ {label}</p>
+              ) : null;
+            })()}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <span className="font-bold text-primary bg-primary/10 px-2 py-0.5 rounded text-sm">@{bet.odds.toFixed(2)}</span>
