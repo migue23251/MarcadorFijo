@@ -620,11 +620,24 @@ export async function verificarResultadosDelDia(): Promise<VerificationSummary> 
       const returnAmount =
         outcome === "won" ? parseFloat((bet.stake * bet.odds).toFixed(2)) : 0;
 
+      // Persist corner/card stats so the frontend can display them
+      const finalStats = stats ? JSON.stringify({
+        homeCorners: stats.homeCorners,
+        awayCorners: stats.awayCorners,
+        totalCorners: stats.totalCorners,
+        homeYellowCards: stats.homeYellowCards,
+        awayYellowCards: stats.awayYellowCards,
+        homeRedCards: stats.homeRedCards,
+        awayRedCards: stats.awayRedCards,
+        totalCards: stats.totalCards,
+      }) : null;
+
       await db
         .update(betsTable)
         .set({
           status: outcome === "void" ? "void" : outcome,
           finalScore,
+          ...(finalStats !== null && { finalStats }),
           returnAmount: outcome === "won" ? returnAmount : null,
         })
         .where(eq(betsTable.id, bet.id));

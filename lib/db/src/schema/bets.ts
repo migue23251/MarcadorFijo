@@ -17,6 +17,7 @@ export const betsTable = pgTable("bets", {
   status: text("status").notNull().default("pending"), // "pending" | "won" | "lost" | "void"
   returnAmount: doublePrecision("return_amount"),
   finalScore: text("final_score"), // e.g. "2-1"
+  finalStats: text("final_stats"), // JSON: {homeCorners,awayCorners,totalCorners,homeYellowCards,awayYellowCards,homeRedCards,awayRedCards,totalCards}
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

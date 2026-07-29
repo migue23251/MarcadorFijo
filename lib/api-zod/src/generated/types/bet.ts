@@ -7,6 +7,17 @@
  */
 import type { BetStatus } from './betStatus';
 
+export interface BetFinalStats {
+  homeCorners?: number;
+  awayCorners?: number;
+  totalCorners?: number;
+  homeYellowCards?: number;
+  awayYellowCards?: number;
+  homeRedCards?: number;
+  awayRedCards?: number;
+  totalCards?: number;
+}
+
 export interface Bet {
   id: number;
   homeTeam: string;
@@ -27,6 +38,10 @@ export interface Bet {
   fixtureId?: number | null;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  finalScore?: string | null;
+  /** @nullable */
+  finalStats?: BetFinalStats | null;
   createdAt: string;
   updatedAt?: string;
 }

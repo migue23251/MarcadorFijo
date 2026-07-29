@@ -227,6 +227,17 @@ export const ListBetsQueryParams = zod.object({
   "limit": zod.coerce.number().int().min(1).max(100).optional().default(15)
 })
 
+const BetFinalStats = zod.object({
+  "homeCorners": zod.number().int().optional(),
+  "awayCorners": zod.number().int().optional(),
+  "totalCorners": zod.number().int().optional(),
+  "homeYellowCards": zod.number().int().optional(),
+  "awayYellowCards": zod.number().int().optional(),
+  "homeRedCards": zod.number().int().optional(),
+  "awayRedCards": zod.number().int().optional(),
+  "totalCards": zod.number().int().optional(),
+})
+
 export const ListBetsResponseItem = zod.object({
   "id": zod.number(),
   "homeTeam": zod.string(),
@@ -241,6 +252,8 @@ export const ListBetsResponseItem = zod.object({
   "returnAmount": zod.number().nullish(),
   "fixtureId": zod.number().nullish().describe('API-Football fixture ID for exact result matching'),
   "notes": zod.string().nullish(),
+  "finalScore": zod.string().nullish().describe('Final goal score, e.g. "2-1"'),
+  "finalStats": BetFinalStats.nullish().describe('Final match stats (corners, cards)'),
   "createdAt": zod.string(),
   "updatedAt": zod.string().optional()
 })
@@ -283,6 +296,8 @@ export const CreateBetResponse = zod.object({
   "returnAmount": zod.number().nullish(),
   "fixtureId": zod.number().nullish().describe('API-Football fixture ID for exact result matching'),
   "notes": zod.string().nullish(),
+  "finalScore": zod.string().nullish().describe('Final goal score, e.g. "2-1"'),
+  "finalStats": BetFinalStats.nullish().describe('Final match stats (corners, cards)'),
   "createdAt": zod.string(),
   "updatedAt": zod.string().optional()
 })
@@ -324,6 +339,8 @@ export const GetBetResponse = zod.object({
   "returnAmount": zod.number().nullish(),
   "fixtureId": zod.number().nullish().describe('API-Football fixture ID for exact result matching'),
   "notes": zod.string().nullish(),
+  "finalScore": zod.string().nullish().describe('Final goal score, e.g. "2-1"'),
+  "finalStats": BetFinalStats.nullish().describe('Final match stats (corners, cards)'),
   "createdAt": zod.string(),
   "updatedAt": zod.string().optional()
 })
@@ -356,6 +373,8 @@ export const UpdateBetResponse = zod.object({
   "returnAmount": zod.number().nullish(),
   "fixtureId": zod.number().nullish().describe('API-Football fixture ID for exact result matching'),
   "notes": zod.string().nullish(),
+  "finalScore": zod.string().nullish().describe('Final goal score, e.g. "2-1"'),
+  "finalStats": BetFinalStats.nullish().describe('Final match stats (corners, cards)'),
   "createdAt": zod.string(),
   "updatedAt": zod.string().optional()
 })

@@ -11,6 +11,7 @@ import {
   getGetMeQueryKey,
   ListBetsStatus,
   Bet,
+  BetFinalStats,
   MatchAnalysis,
 } from "@workspace/api-client-react";
 import { formatCurrency } from "@/lib/currency";
@@ -41,8 +42,13 @@ const PAGE_SIZE = 15;
 /**
  * Returns a human-readable final result label based on the market type.
  * finalScore is always stored as "home-away" goals (e.g. "2-1").
+ * finalStats contains corners/cards when available (corner or card markets).
  */
-function getFinalResultLabel(market: string, finalScore: string | null | undefined): string | null {
+function getFinalResultLabel(
+  market: string,
+  finalScore: string | null | undefined,
+  finalStats?: BetFinalStats | null,
+): string | null {
   if (!finalScore || finalScore === "—") return null;
 
   const m = market.toLowerCase();
@@ -52,6 +58,32 @@ function getFinalResultLabel(market: string, finalScore: string | null | undefin
   const home = parseInt(parts[0], 10);
   const away = parseInt(parts[1], 10);
   if (isNaN(home) || isNaN(away)) return finalScore;
+
+  // Córners — usar finalStats si están disponibles
+  if (m.includes("córner") || m.includes("corner") || m.includes("esquina")) {
+    if (finalStats && finalStats.totalCorners !== undefined) {
+      return `${finalStats.homeCorners}–${finalStats.awayCorners} córners (${finalStats.totalCorners} total) · Goles ${home}–${away}`;
+    }
+    return `Goles: ${home}–${away}`;
+  }
+
+  // Tarjetas — usar finalStats si están disponibles
+  if (
+    m.includes("tarjeta") || m.includes("card") ||
+    m.includes("amarilla") || m.includes("roja") || m.includes("booking")
+  ) {
+    if (finalStats && finalStats.totalCards !== undefined) {
+      const parts: string[] = [];
+      if (finalStats.totalCards !== undefined)
+        parts.push(`${finalStats.totalCards} tarjetas`);
+      if ((finalStats.homeYellowCards ?? 0) + (finalStats.awayYellowCards ?? 0) > 0)
+        parts.push(`🟨 ${(finalStats.homeYellowCards ?? 0) + (finalStats.awayYellowCards ?? 0)}`);
+      if ((finalStats.homeRedCards ?? 0) + (finalStats.awayRedCards ?? 0) > 0)
+        parts.push(`🟥 ${(finalStats.homeRedCards ?? 0) + (finalStats.awayRedCards ?? 0)}`);
+      return `${parts.join(" · ")} · Goles ${home}–${away}`;
+    }
+    return `Goles: ${home}–${away}`;
+  }
 
   // Over / Under goles → mostrar total de goles
   if (
@@ -72,19 +104,6 @@ function getFinalResultLabel(market: string, finalScore: string | null | undefin
     return bothScored
       ? `Ambos anotaron (${home}–${away})`
       : `No anotaron ambos (${home}–${away})`;
-  }
-
-  // Córners — el conteo no se almacena, solo el score de goles
-  if (m.includes("córner") || m.includes("corner") || m.includes("esquina")) {
-    return `Goles: ${home}–${away} · Córners no almacenados`;
-  }
-
-  // Tarjetas — ídem
-  if (
-    m.includes("tarjeta") || m.includes("card") ||
-    m.includes("amarilla") || m.includes("roja") || m.includes("booking")
-  ) {
-    return `Goles: ${home}–${away} · Tarjetas no almacenadas`;
   }
 
   // 1X2, hándicap asiático/europeo y cualquier otro → mostrar score
@@ -385,7 +404,7 @@ function BetRow({ bet, currency }: { bet: Bet; currency: string }) {
             <span className="font-semibold text-foreground text-sm">{bet.selection}</span>
             <span className="text-xs text-muted-foreground truncate max-w-[200px]">{bet.market}</span>
             {bet.status !== "pending" && (() => {
-              const label = getFinalResultLabel(bet.market, bet.finalScore);
+              const label = getFinalResultLabel(bet.market, bet.finalScore, bet.finalStats);
               return label ? (
                 <span className="text-xs font-medium text-primary/80 mt-0.5">
                   ✦ {label}
@@ -535,7 +554,7 @@ function BetCard({ bet, currency }: { bet: Bet; currency: string }) {
             <p className="text-xs text-muted-foreground truncate">{bet.market}</p>
             <p className="font-semibold text-sm text-foreground">{bet.selection}</p>
             {bet.status !== "pending" && (() => {
-              const label = getFinalResultLabel(bet.market, bet.finalScore);
+              const label = getFinalResultLabel(bet.market, bet.finalScore, bet.finalStats);
               return label ? (
                 <p className="text-xs font-medium text-primary/80 mt-0.5">✦ {label}</p>
               ) : null;

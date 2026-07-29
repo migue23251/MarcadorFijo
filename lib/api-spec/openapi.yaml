@@ -637,6 +637,30 @@ components:
           description: API-Football fixture ID for exact result matching
         notes:
           type: ["string", "null"]
+        finalScore:
+          type: ["string", "null"]
+          description: Final goal score, e.g. "2-1"
+        finalStats:
+          nullable: true
+          description: Final match stats (corners, cards) — populated for corner/card market bets
+          type: object
+          properties:
+            homeCorners:
+              type: integer
+            awayCorners:
+              type: integer
+            totalCorners:
+              type: integer
+            homeYellowCards:
+              type: integer
+            awayYellowCards:
+              type: integer
+            homeRedCards:
+              type: integer
+            awayRedCards:
+              type: integer
+            totalCards:
+              type: integer
         createdAt:
           type: string
         updatedAt:

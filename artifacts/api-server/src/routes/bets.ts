@@ -33,6 +33,8 @@ function serializeBet(bet: typeof betsTable.$inferSelect) {
     status: bet.status,
     returnAmount: bet.returnAmount,
     notes: bet.notes,
+    finalScore: bet.finalScore ?? null,
+    finalStats: bet.finalStats ? JSON.parse(bet.finalStats) : null,
     createdAt: bet.createdAt.toISOString(),
     updatedAt: bet.updatedAt.toISOString(),
   };
