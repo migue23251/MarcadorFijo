@@ -202,6 +202,7 @@ export default function Historial() {
                     <tr>
                       <th className="px-4 py-3 font-semibold">Fecha/Partido</th>
                       <th className="px-4 py-3 font-semibold">Mercado/Selección</th>
+                      <th className="px-4 py-3 font-semibold">Resultado</th>
                       <th className="px-4 py-3 font-semibold text-right">Cuota</th>
                       <th className="px-4 py-3 font-semibold text-right">Monto</th>
                       <th className="px-4 py-3 font-semibold text-center">Estado</th>
@@ -403,15 +404,21 @@ function BetRow({ bet, currency }: { bet: Bet; currency: string }) {
           <div className="flex flex-col">
             <span className="font-semibold text-foreground text-sm">{bet.selection}</span>
             <span className="text-xs text-muted-foreground truncate max-w-[200px]">{bet.market}</span>
-            {bet.status !== "pending" && (() => {
-              const label = getFinalResultLabel(bet.market, bet.finalScore, bet.finalStats);
-              return label ? (
-                <span className="text-xs font-medium text-primary/80 mt-0.5">
-                  ✦ {label}
-                </span>
-              ) : null;
-            })()}
           </div>
+        </td>
+        <td className="px-4 py-3">
+          {bet.status !== "pending" ? (() => {
+            const label = getFinalResultLabel(bet.market, bet.finalScore, bet.finalStats);
+            return label ? (
+              <span className="text-xs font-semibold text-foreground bg-secondary px-2 py-1 rounded">
+                {label}
+              </span>
+            ) : (
+              <span className="text-xs text-muted-foreground">—</span>
+            );
+          })() : (
+            <span className="text-xs text-muted-foreground">—</span>
+          )}
         </td>
         <td className="px-4 py-3 text-right">
           <span className="font-bold text-primary bg-primary/10 px-2 py-0.5 rounded text-sm">
