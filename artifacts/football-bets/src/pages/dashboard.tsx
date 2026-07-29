@@ -421,7 +421,10 @@ export default function Dashboard() {
           {nbaRadarMutation.isError && (() => {
             const errData = (nbaRadarMutation.error as any)?.data as { error?: string; code?: string } | undefined;
             const isFreemiumBlocked = errData?.code === "FREEMIUM_DISABLED";
-            const errorMsg = errData?.error ?? (nbaRadarMutation.error as Error)?.message ?? "Error inesperado.";
+            const rawMsg = typeof errData === 'object' ? errData?.error : undefined;
+            const fallbackMsg = (nbaRadarMutation.error as Error)?.message ?? "";
+            const isHtml = (s?: string) => s ? s.trimStart().startsWith("<") : false;
+            const errorMsg = rawMsg ?? (isHtml(fallbackMsg) ? "Error al conectar con el proveedor de datos. Verifica tu API key o intenta de nuevo más tarde." : fallbackMsg) || "Error inesperado.";
             if (isFreemiumBlocked) {
               return (
                 <div className="bg-card border border-primary/30 p-4 rounded-md flex items-start gap-3">
@@ -545,7 +548,10 @@ export default function Dashboard() {
         const errData = (radarMutation.error as any)?.data as { error?: string; retryAfter?: number; code?: string } | undefined;
         const is429 = (radarMutation.error as any)?.status === 429 || !!errData?.retryAfter;
         const isFreemiumBlocked = errData?.code === "FREEMIUM_DISABLED";
-        const errorMsg = errData?.error ?? (radarMutation.error as Error)?.message ?? "Error inesperado. Inténtalo de nuevo.";
+        const rawMsg = typeof errData === 'object' ? errData?.error : undefined;
+        const fallbackMsg = (radarMutation.error as Error)?.message ?? "";
+        const isHtml = (s?: string) => s ? s.trimStart().startsWith("<") : false;
+        const errorMsg = rawMsg ?? (isHtml(fallbackMsg) ? "Error al conectar con el proveedor de datos. Verifica tu API key o intenta de nuevo más tarde." : fallbackMsg) || "Error inesperado. Inténtalo de nuevo.";
 
         if (isFreemiumBlocked) {
           return (
