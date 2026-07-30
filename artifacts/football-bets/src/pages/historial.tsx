@@ -37,6 +37,29 @@ import { Link } from "wouter";
 const PAGE_SIZE = 15;
 
 // ---------------------------------------------------------------------------
+// Parlay helpers
+// ---------------------------------------------------------------------------
+
+interface ParlayLeg {
+  homeTeam: string;
+  awayTeam: string;
+  league: string;
+  market: string;
+  selection: string;
+  odds: number;
+  kickoffTime?: string | null;
+}
+
+function parseParlayNotes(notes: string | null | undefined): { legs: ParlayLeg[]; userNotes?: string } | null {
+  if (!notes) return null;
+  try {
+    const parsed = JSON.parse(notes);
+    if (parsed.isParlay && Array.isArray(parsed.legs)) return parsed;
+  } catch {}
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -344,6 +367,8 @@ function BetRow({ bet, currency }: { bet: Bet; currency: string }) {
   const { toast } = useToast();
   const updateBet = useUpdateBet();
   const [showAnalysis, setShowAnalysis] = useState(false);
+  const [showParlayLegs, setShowParlayLegs] = useState(false);
+  const isParlay = bet.market === "Parlay del Día";
 
   const handleStatusUpdate = (status: "won" | "lost") => {
     const returnAmount = status === "won" ? bet.stake * bet.odds : 0;
@@ -392,29 +417,52 @@ function BetRow({ bet, currency }: { bet: Bet; currency: string }) {
       <tr className={`hover:bg-secondary/20 transition-colors ${rowColors[bet.status]}`}>
         <td className="px-4 py-3">
           <div className="flex flex-col">
-            <span className="font-semibold text-foreground text-sm">
-              {bet.homeTeam} vs {bet.awayTeam}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {bet.league} • {formattedDate}
-            </span>
+            {isParlay ? (
+              <>
+                <div className="flex items-center gap-1.5">
+                  <TrendingUp className="w-3.5 h-3.5 text-primary shrink-0" />
+                  <span className="font-semibold text-foreground text-sm">Parlay del Día</span>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  {bet.awayTeam} · {formattedDate}
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="font-semibold text-foreground text-sm">
+                  {bet.homeTeam} vs {bet.awayTeam}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {bet.league} • {formattedDate}
+                </span>
+              </>
+            )}
           </div>
         </td>
         <td className="px-4 py-3">
           <div className="flex flex-col gap-0.5">
-            <div className="flex items-center gap-1.5">
-              <span className="font-semibold text-foreground text-sm">{bet.selection}</span>
-              {bet.confidence && (
-                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border uppercase ${
-                  bet.confidence === "high" ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/30" :
-                  bet.confidence === "medium" ? "bg-amber-500/15 text-amber-600 border-amber-500/30" :
-                  "bg-red-500/15 text-red-500 border-red-500/30"
-                }`}>
-                  {{ high: "Alta", medium: "Media", low: "Baja" }[bet.confidence]}
-                </span>
-              )}
-            </div>
-            <span className="text-xs text-muted-foreground truncate max-w-[200px]">{bet.market}</span>
+            {isParlay ? (
+              <>
+                <span className="font-semibold text-foreground text-sm">{bet.awayTeam}</span>
+                <span className="text-xs text-muted-foreground">Parlay del Día</span>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-foreground text-sm">{bet.selection}</span>
+                  {bet.confidence && (
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border uppercase ${
+                      bet.confidence === "high" ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/30" :
+                      bet.confidence === "medium" ? "bg-amber-500/15 text-amber-600 border-amber-500/30" :
+                      "bg-red-500/15 text-red-500 border-red-500/30"
+                    }`}>
+                      {{ high: "Alta", medium: "Media", low: "Baja" }[bet.confidence]}
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs text-muted-foreground truncate max-w-[200px]">{bet.market}</span>
+              </>
+            )}
           </div>
         </td>
         <td className="px-4 py-3 text-right">
@@ -425,7 +473,7 @@ function BetRow({ bet, currency }: { bet: Bet; currency: string }) {
         <td className="px-4 py-3 text-right font-medium text-foreground">{formatCurrency(bet.stake, currency)}</td>
         <td className="px-4 py-3 text-center">
           {(() => {
-            const resultLabel = bet.status !== "pending"
+            const resultLabel = !isParlay && bet.status !== "pending"
               ? getFinalResultLabel(bet.market, bet.finalScore, bet.finalStats)
               : null;
             const badge = (
@@ -464,9 +512,9 @@ function BetRow({ bet, currency }: { bet: Bet; currency: string }) {
         <td className="px-4 py-3 text-center">
           <div className="flex items-center justify-center gap-2">
             <button
-              onClick={() => setShowAnalysis(true)}
+              onClick={() => isParlay ? setShowParlayLegs(true) : setShowAnalysis(true)}
               className="p-1.5 bg-primary/10 text-primary hover:bg-primary/20 rounded border border-primary/30 transition-colors"
-              title="Ver análisis del partido"
+              title={isParlay ? "Ver picks del parlay" : "Ver análisis del partido"}
             >
               <ScanSearch className="w-4 h-4" />
             </button>
@@ -476,7 +524,7 @@ function BetRow({ bet, currency }: { bet: Bet; currency: string }) {
           </div>
         </td>
       </tr>
-      {showAnalysis && (
+      {showAnalysis && !isParlay && (
         <AnalysisModal
           homeTeam={bet.homeTeam}
           awayTeam={bet.awayTeam}
@@ -486,6 +534,9 @@ function BetRow({ bet, currency }: { bet: Bet; currency: string }) {
           userMarket={bet.market}
           onClose={() => setShowAnalysis(false)}
         />
+      )}
+      {showParlayLegs && isParlay && (
+        <ParlayLegsModal bet={bet} onClose={() => setShowParlayLegs(false)} />
       )}
     </>
   );
@@ -500,6 +551,8 @@ function BetCard({ bet, currency }: { bet: Bet; currency: string }) {
   const { toast } = useToast();
   const updateBet = useUpdateBet();
   const [showAnalysis, setShowAnalysis] = useState(false);
+  const [showParlayLegs, setShowParlayLegs] = useState(false);
+  const isParlay = bet.market === "Parlay del Día";
 
   const handleStatusUpdate = (status: "won" | "lost") => {
     const returnAmount = status === "won" ? bet.stake * bet.odds : 0;
@@ -537,10 +590,22 @@ function BetCard({ bet, currency }: { bet: Bet; currency: string }) {
         {/* Match + status */}
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="font-semibold text-foreground text-sm truncate">
-              {bet.homeTeam} vs {bet.awayTeam}
-            </p>
-            <p className="text-xs text-muted-foreground">{bet.league} · {formattedDate}</p>
+            {isParlay ? (
+              <>
+                <div className="flex items-center gap-1.5">
+                  <TrendingUp className="w-3.5 h-3.5 text-primary shrink-0" />
+                  <p className="font-semibold text-foreground text-sm">Parlay del Día</p>
+                </div>
+                <p className="text-xs text-muted-foreground">{bet.awayTeam} · {formattedDate}</p>
+              </>
+            ) : (
+              <>
+                <p className="font-semibold text-foreground text-sm truncate">
+                  {bet.homeTeam} vs {bet.awayTeam}
+                </p>
+                <p className="text-xs text-muted-foreground">{bet.league} · {formattedDate}</p>
+              </>
+            )}
           </div>
           <span className={`px-2 py-0.5 text-xs font-semibold rounded-full border flex items-center shrink-0 ${statusConfig[bet.status].classes}`}>
             {statusConfig[bet.status].icon}
@@ -551,25 +616,37 @@ function BetCard({ bet, currency }: { bet: Bet; currency: string }) {
         {/* Market + odds + stake */}
         <div className="flex items-end justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-xs text-muted-foreground truncate">{bet.market}</p>
-            <div className="flex items-center gap-1.5">
-              <p className="font-semibold text-sm text-foreground">{bet.selection}</p>
-              {bet.confidence && (
-                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border uppercase shrink-0 ${
-                  bet.confidence === "high" ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/30" :
-                  bet.confidence === "medium" ? "bg-amber-500/15 text-amber-600 border-amber-500/30" :
-                  "bg-red-500/15 text-red-500 border-red-500/30"
-                }`}>
-                  {{ high: "Alta", medium: "Media", low: "Baja" }[bet.confidence]}
-                </span>
-              )}
-            </div>
-            {bet.status !== "pending" && (() => {
-              const label = getFinalResultLabel(bet.market, bet.finalScore, bet.finalStats);
-              return label ? (
-                <p className="text-xs font-medium text-primary/80 mt-0.5">✦ {label}</p>
-              ) : null;
-            })()}
+            {isParlay ? (
+              <>
+                <p className="text-xs text-muted-foreground">Parlay del Día</p>
+                <p className="font-semibold text-sm text-foreground">{bet.awayTeam}</p>
+                {bet.status !== "pending" && bet.finalScore && (
+                  <p className="text-xs font-medium text-primary/80 mt-0.5">✦ {bet.finalScore}</p>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-muted-foreground truncate">{bet.market}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="font-semibold text-sm text-foreground">{bet.selection}</p>
+                  {bet.confidence && (
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border uppercase shrink-0 ${
+                      bet.confidence === "high" ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/30" :
+                      bet.confidence === "medium" ? "bg-amber-500/15 text-amber-600 border-amber-500/30" :
+                      "bg-red-500/15 text-red-500 border-red-500/30"
+                    }`}>
+                      {{ high: "Alta", medium: "Media", low: "Baja" }[bet.confidence]}
+                    </span>
+                  )}
+                </div>
+                {bet.status !== "pending" && (() => {
+                  const label = getFinalResultLabel(bet.market, bet.finalScore, bet.finalStats);
+                  return label ? (
+                    <p className="text-xs font-medium text-primary/80 mt-0.5">✦ {label}</p>
+                  ) : null;
+                })()}
+              </>
+            )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <span className="font-bold text-primary bg-primary/10 px-2 py-0.5 rounded text-sm">@{bet.odds.toFixed(2)}</span>
@@ -590,16 +667,16 @@ function BetCard({ bet, currency }: { bet: Bet; currency: string }) {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setShowAnalysis(true)}
+              onClick={() => isParlay ? setShowParlayLegs(true) : setShowAnalysis(true)}
               className="p-1.5 bg-primary/10 text-primary hover:bg-primary/20 rounded border border-primary/30 transition-colors"
-              title="Ver análisis"
+              title={isParlay ? "Ver picks del parlay" : "Ver análisis"}
             >
               <ScanSearch className="w-4 h-4" />
             </button>
           </div>
         </div>
       </div>
-      {showAnalysis && (
+      {showAnalysis && !isParlay && (
         <AnalysisModal
           homeTeam={bet.homeTeam}
           awayTeam={bet.awayTeam}
@@ -610,7 +687,96 @@ function BetCard({ bet, currency }: { bet: Bet; currency: string }) {
           onClose={() => setShowAnalysis(false)}
         />
       )}
+      {showParlayLegs && isParlay && (
+        <ParlayLegsModal bet={bet} onClose={() => setShowParlayLegs(false)} />
+      )}
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Parlay Legs Modal — slide-in panel with legs list
+// ---------------------------------------------------------------------------
+
+function ParlayLegsModal({ bet, onClose }: { bet: Bet; onClose: () => void }) {
+  const parlay = parseParlayNotes(bet.notes);
+  const legs: ParlayLeg[] = parlay?.legs ?? [];
+
+  const statusConfig = {
+    pending: { label: "Pendiente", classes: "bg-secondary text-muted-foreground border-border" },
+    won:     { label: "Acertado",  classes: "bg-emerald-500/20 text-emerald-500 border-emerald-500/30" },
+    lost:    { label: "Perdido",   classes: "bg-red-500/20 text-red-500 border-red-500/30" },
+    void:    { label: "Anulado",   classes: "bg-amber-500/20 text-amber-500 border-amber-500/30" },
+  };
+
+  return createPortal(
+    <>
+      <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-y-0 right-0 z-50 w-full max-w-lg flex flex-col bg-card border-l border-border shadow-2xl overflow-hidden animate-in slide-in-from-right duration-300">
+        {/* Header */}
+        <div className="flex items-start justify-between p-5 border-b border-border bg-secondary/30 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/15 shrink-0">
+              <TrendingUp className="w-4 h-4 text-primary" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-primary uppercase tracking-wider">Parlay del Día</p>
+              <h2 className="text-lg font-bold text-foreground leading-tight">
+                {legs.length} pick{legs.length !== 1 ? "s" : ""} · <span className="text-primary">@{bet.odds.toFixed(2)}</span>
+              </h2>
+              <div className="flex items-center gap-2 mt-1">
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${statusConfig[bet.status].classes}`}>
+                  {statusConfig[bet.status].label}
+                </span>
+                {bet.status !== "pending" && bet.finalScore && (
+                  <span className="text-xs text-muted-foreground">{bet.finalScore}</span>
+                )}
+              </div>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground shrink-0 mt-0.5">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Legs */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-3">
+          {legs.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">No hay datos de picks disponibles.</p>
+          ) : legs.map((leg, idx) => {
+            const kickoff = leg.kickoffTime
+              ? (() => { const d = new Date(leg.kickoffTime!); return isNaN(d.getTime()) ? null : d.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); })()
+              : null;
+            return (
+              <div key={idx} className="rounded-lg border border-border bg-secondary/20 p-4 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="shrink-0 w-5 h-5 rounded-full bg-primary/15 text-primary text-[11px] font-bold flex items-center justify-center">{idx + 1}</span>
+                    <span className="font-semibold text-sm text-foreground truncate">{leg.homeTeam} vs {leg.awayTeam}</span>
+                  </div>
+                  <span className="font-bold text-primary bg-primary/10 px-2 py-0.5 rounded text-sm tabular-nums shrink-0">@{leg.odds.toFixed(2)}</span>
+                </div>
+                <div className="flex items-center gap-1.5 pl-7 flex-wrap">
+                  <span className="text-xs text-muted-foreground">{leg.league}</span>
+                  {kickoff && <><span className="text-muted-foreground/40">·</span><span className="text-xs text-muted-foreground">{kickoff}</span></>}
+                  <span className="text-muted-foreground/40">·</span>
+                  <span className="text-xs font-medium text-foreground">{leg.market}</span>
+                  <span className="text-muted-foreground/40">→</span>
+                  <span className="text-xs font-bold text-primary">{leg.selection}</span>
+                </div>
+              </div>
+            );
+          })}
+          {parlay?.userNotes && (
+            <div className="rounded-lg border border-border bg-secondary/20 p-3">
+              <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Notas</p>
+              <p className="text-sm text-foreground">{parlay.userNotes}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </>,
+    document.body,
   );
 }
 
