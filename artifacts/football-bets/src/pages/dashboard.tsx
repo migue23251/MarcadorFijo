@@ -343,7 +343,7 @@ function ParlayDelDia({
 
             {/* Legs list */}
             <div className="overflow-y-auto flex-1 p-4 space-y-2">
-              {parlay!.legs.map((leg, idx) => {
+              {(parlay?.legs ?? []).map((leg, idx) => {
                 const kickoff = leg.kickoffTime
                   ? (() => { const d = new Date(leg.kickoffTime!); return isNaN(d.getTime()) ? null : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); })()
                   : null;
