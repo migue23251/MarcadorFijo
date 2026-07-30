@@ -1443,6 +1443,7 @@ function BetModalContent({ prediction, match, leagueName, onClose }: { predictio
 
 function ParlayBetModalContent({ parlay, onClose }: { parlay: ParlayData; onClose: () => void }) {
   const [stake, setStake] = useState<string>("10");
+  const [odds, setOdds] = useState<string>(parlay.combinedOdds.toString());
   const [notes, setNotes] = useState<string>("");
 
   const { toast } = useToast();
@@ -1461,7 +1462,8 @@ function ParlayBetModalContent({ parlay, onClose }: { parlay: ParlayData; onClos
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const stakeNum = parseFloat(stake);
-    if (isNaN(stakeNum) || stakeNum <= 0) return;
+    const oddsNum = parseFloat(odds);
+    if (isNaN(stakeNum) || stakeNum <= 0 || isNaN(oddsNum) || oddsNum <= 0) return;
 
     createBet.mutate({
       data: {
@@ -1471,7 +1473,7 @@ function ParlayBetModalContent({ parlay, onClose }: { parlay: ParlayData; onClos
         kickoffTime: latestKickoff,
         market: "Parlay del Día",
         selection: parlay.legs.map(l => l.selection).join(" · "),
-        odds: parlay.combinedOdds,
+        odds: oddsNum,
         stake: stakeNum,
         confidence: "high",
         notes: JSON.stringify({ isParlay: true, legs: parlay.legs, ...(notes ? { userNotes: notes } : {}) }),
@@ -1488,8 +1490,6 @@ function ParlayBetModalContent({ parlay, onClose }: { parlay: ParlayData; onClos
       }
     });
   };
-
-  const potentialReturn = parseFloat(stake) > 0 ? parseFloat(stake) * parlay.combinedOdds : 0;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
@@ -1523,8 +1523,16 @@ function ParlayBetModalContent({ parlay, onClose }: { parlay: ParlayData; onClos
         </div>
       </div>
 
-      {/* Stake */}
+      {/* Cuota + Monto */}
       <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1">
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Cuota</label>
+          <input
+            type="number" step="0.01" value={odds} onChange={e => setOdds(e.target.value)}
+            className="w-full bg-background border border-border px-3 py-2 rounded text-sm text-primary font-bold focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+            required
+          />
+        </div>
         <div className="space-y-1">
           <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Monto ({currency})</label>
           <input
@@ -1532,12 +1540,6 @@ function ParlayBetModalContent({ parlay, onClose }: { parlay: ParlayData; onClos
             className="w-full bg-background border border-border px-3 py-2 rounded text-sm font-bold focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
             required
           />
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Retorno potencial</label>
-          <div className="bg-background border border-border px-3 py-2 rounded text-sm font-bold text-primary tabular-nums">
-            {isNaN(potentialReturn) || potentialReturn <= 0 ? "—" : potentialReturn.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-          </div>
         </div>
       </div>
 
