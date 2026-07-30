@@ -639,11 +639,23 @@ export async function verificarResultadosDelDia(): Promise<VerificationSummary> 
 
   logger.info({ dates: [...betsByDate.keys()] }, "Fechas únicas de kickoff a verificar");
 
+  // Caché compartido de fixtures por fecha — evita llamadas duplicadas a la API
+  // cuando patas de un parlay caen en fechas distintas al bet principal.
+  const fixturesCache = new Map<string, FinishedFixtures>();
+
+  /** Devuelve el FinishedFixtures para una fecha dada, usando caché. */
+  async function getFixtures(targetDate: string): Promise<FinishedFixtures> {
+    if (fixturesCache.has(targetDate)) return fixturesCache.get(targetDate)!;
+    const result = await fetchFinishedFixtures(targetDate);
+    fixturesCache.set(targetDate, result);
+    return result;
+  }
+
   // 3. Procesar cada fecha
   for (const [date, bets] of betsByDate.entries()) {
     let fixtures: FinishedFixtures;
     try {
-      fixtures = await fetchFinishedFixtures(date);
+      fixtures = await getFixtures(date);
     } catch (err) {
       logger.error({ err, date }, "Error al obtener resultados de API-Football para la fecha");
       summary.notMatched += bets.length;
@@ -716,12 +728,30 @@ export async function verificarResultadosDelDia(): Promise<VerificationSummary> 
           let anyLegUnresolved = false;
 
           for (const leg of legs) {
+            // Cada pata puede tener su propio kickoffTime en una fecha distinta
+            // al bet principal — buscar en el mapa de fixtures correcto.
+            const legDate = leg.kickoffTime
+              ? kickoffDateUTC(leg.kickoffTime)
+              : date;
+
+            let legFixtures: FinishedFixtures;
+            try {
+              legFixtures = await getFixtures(legDate);
+            } catch (err) {
+              logger.error({ err, legDate, betId: bet.id }, "Error al obtener fixtures para pata del parlay — pospuesto");
+              anyLegUnresolved = true;
+              break;
+            }
+
             let legFixture: FixtureResult | undefined;
-            // Try to find in the current date's fixture map
-            legFixture = findFixture(fixtures.byName, leg.homeTeam, leg.awayTeam);
+            legFixture = findFixture(legFixtures.byName, leg.homeTeam, leg.awayTeam);
 
             if (!legFixture) {
-              // Leg's match not yet finished — cannot resolve parlay yet
+              // Partido de la pata aún no finalizado o no encontrado
+              logger.info(
+                { betId: bet.id, legDate, homeTeam: leg.homeTeam, awayTeam: leg.awayTeam },
+                "Pata del parlay no encontrada en resultados — parlay pospuesto",
+              );
               anyLegUnresolved = true;
               break;
             }
