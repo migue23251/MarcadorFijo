@@ -705,6 +705,74 @@ export async function verificarResultadosDelDia(): Promise<VerificationSummary> 
         }
       }
 
+      // ── Parlay bet: evaluate all legs then decide ──────────────────────────
+      if (bet.market === "Parlay del Día" && bet.notes) {
+        let parsedParlay: { isParlay?: boolean; legs?: Array<{ homeTeam: string; awayTeam: string; market: string; selection: string; kickoffTime?: string | null }> } = {};
+        try { parsedParlay = JSON.parse(bet.notes); } catch { /* ignore */ }
+
+        if (parsedParlay.isParlay && Array.isArray(parsedParlay.legs)) {
+          const legs = parsedParlay.legs;
+          const legOutcomes: BetOutcome[] = [];
+          let anyLegUnresolved = false;
+
+          for (const leg of legs) {
+            let legFixture: FixtureResult | undefined;
+            // Try to find in the current date's fixture map
+            legFixture = findFixture(fixtures.byName, leg.homeTeam, leg.awayTeam);
+
+            if (!legFixture) {
+              // Leg's match not yet finished — cannot resolve parlay yet
+              anyLegUnresolved = true;
+              break;
+            }
+
+            let legStats: FixtureStats | undefined;
+            if (requiresStats(leg.market)) {
+              const loaded = await loadFixtureStats(legFixture, keys);
+              if (loaded) legStats = loaded;
+            }
+
+            const legOutcome = evaluateBet(leg.market, leg.selection, legFixture.homeScore, legFixture.awayScore, legStats);
+            legOutcomes.push(legOutcome);
+
+            if (legOutcome === "lost") break; // Short-circuit: parlay is already lost
+          }
+
+          if (anyLegUnresolved) {
+            logger.info({ betId: bet.id }, "Parlay tiene partidos aún no finalizados — pospuesto");
+            summary.notMatched++;
+            continue;
+          }
+
+          // Determine parlay outcome
+          const parlayOutcome: BetOutcome =
+            legOutcomes.some(o => o === "lost") ? "lost" :
+            legOutcomes.every(o => o === "won") ? "won" : "void";
+
+          const returnAmount = parlayOutcome === "won"
+            ? parseFloat((bet.stake * bet.odds).toFixed(2))
+            : 0;
+
+          await db
+            .update(betsTable)
+            .set({
+              status: parlayOutcome,
+              finalScore: `${legOutcomes.filter(o => o === "won").length}/${legs.length} picks`,
+              returnAmount: parlayOutcome === "won" ? returnAmount : null,
+            })
+            .where(eq(betsTable.id, bet.id));
+
+          if (parlayOutcome === "won") summary.won++;
+          else if (parlayOutcome === "lost") summary.lost++;
+          else summary.voided++;
+          summary.resolved++;
+
+          logger.info({ betId: bet.id, legOutcomes, parlayOutcome }, "Parlay resuelto");
+          continue;
+        }
+      }
+      // ── End parlay handling ────────────────────────────────────────────────
+
       const outcome = evaluateBet(
         bet.market,
         bet.selection,

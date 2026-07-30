@@ -210,14 +210,15 @@ interface ParlayData {
 
 function ParlayDelDia({
   hasAnalyzedMatches,
-  onBetLeg,
+  onBetParlay,
 }: {
   hasAnalyzedMatches: boolean;
-  onBetLeg: (leg: ParlayLeg) => void;
+  onBetParlay: (parlay: ParlayData) => void;
 }) {
   const [parlay, setParlay] = useState<ParlayData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
   const fetchedRef = useRef(false);
 
   const fetchParlay = useCallback(async () => {
@@ -237,7 +238,6 @@ function ParlayDelDia({
     }
   }, []);
 
-  // Auto-fetch once when there are analyzed matches
   useEffect(() => {
     if (hasAnalyzedMatches && !fetchedRef.current) {
       fetchedRef.current = true;
@@ -250,127 +250,157 @@ function ParlayDelDia({
   const hasLegs = (parlay?.legs.length ?? 0) > 0;
 
   return (
-    <div className="rounded-xl border border-primary/30 bg-primary/5 overflow-hidden animate-in fade-in duration-500">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-primary/20">
-        <div className="flex items-center gap-2.5">
-          <div className="p-1.5 rounded-md bg-primary/15">
-            <TrendingUp className="w-4 h-4 text-primary" />
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-foreground">Parlay del Día</h3>
-            <p className="text-xs text-muted-foreground">
-              {loading
-                ? "Calculando picks de alta confianza..."
-                : parlay
-                  ? `${parlay.totalAnalyzed} partido${parlay.totalAnalyzed !== 1 ? "s" : ""} analizados · ${parlay.legs.length} pick${parlay.legs.length !== 1 ? "s" : ""} alta confianza`
-                  : "Picks con confianza alta de todos los partidos analizados hoy"}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {hasLegs && (
-            <div className="text-right">
-              <div className="text-xs text-muted-foreground">Cuota combinada</div>
-              <div className="text-lg font-black text-primary tabular-nums">
-                @{parlay!.combinedOdds.toFixed(2)}
-              </div>
+    <>
+      {/* Compact card on dashboard */}
+      <div className="rounded-xl border border-primary/30 bg-primary/5 animate-in fade-in duration-500">
+        <div className="flex items-center justify-between gap-3 px-5 py-4">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-1.5 rounded-md bg-primary/15 shrink-0">
+              <TrendingUp className="w-4 h-4 text-primary" />
             </div>
-          )}
-          <button
-            onClick={() => { fetchedRef.current = true; fetchParlay(); }}
-            disabled={loading}
-            className="p-1.5 rounded-md hover:bg-primary/10 transition-colors text-muted-foreground hover:text-primary disabled:opacity-40"
-            title="Actualizar parlay"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-          </button>
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-foreground">Parlay del Día</h3>
+              <p className="text-xs text-muted-foreground truncate">
+                {loading
+                  ? "Calculando picks de alta confianza..."
+                  : parlay
+                    ? `${parlay.totalAnalyzed} partido${parlay.totalAnalyzed !== 1 ? "s" : ""} analizados · ${parlay.legs.length} pick${parlay.legs.length !== 1 ? "s" : ""} alta confianza`
+                    : error
+                      ? "Error al cargar el parlay"
+                      : "Picks con confianza alta de todos los partidos analizados hoy"}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {hasLegs && (
+              <div className="text-right hidden sm:block">
+                <div className="text-xs text-muted-foreground">Cuota combinada</div>
+                <div className="text-lg font-black text-primary tabular-nums">
+                  @{parlay!.combinedOdds.toFixed(2)}
+                </div>
+              </div>
+            )}
+            <button
+              onClick={() => { fetchedRef.current = true; fetchParlay(); }}
+              disabled={loading}
+              className="p-1.5 rounded-md hover:bg-primary/10 transition-colors text-muted-foreground hover:text-primary disabled:opacity-40"
+              title="Actualizar parlay"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+            </button>
+            {hasLegs && (
+              <button
+                onClick={() => setModalOpen(true)}
+                className="px-3 py-1.5 bg-primary text-primary-foreground text-xs font-semibold rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-1.5"
+              >
+                <TrendingUp className="w-3.5 h-3.5" />
+                Ver Predicciones
+              </button>
+            )}
+          </div>
         </div>
-      </div>
-
-      {/* Body */}
-      <div className="p-4 space-y-2">
-        {/* Loading skeleton */}
-        {loading && (
-          <div className="space-y-2">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="h-14 bg-primary/10 animate-pulse rounded-lg" />
+        {/* Loading skeleton (only shown inline when no parlay yet) */}
+        {loading && !parlay && (
+          <div className="px-5 pb-4 space-y-2">
+            {[1, 2].map(i => (
+              <div key={i} className="h-4 bg-primary/10 animate-pulse rounded" />
             ))}
           </div>
         )}
-
-        {/* Error */}
         {error && !loading && (
-          <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
-            <span>{error}</span>
+          <div className="px-5 pb-4">
+            <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+              <span>{error}</span>
+            </div>
           </div>
         )}
+      </div>
 
-        {/* Empty state */}
-        {!loading && !error && parlay && !hasLegs && (
-          <p className="text-sm text-muted-foreground text-center py-4">
-            Aún no hay picks de alta confianza. Analiza más partidos para generar el parlay.
-          </p>
-        )}
-
-        {/* Picks */}
-        {!loading && hasLegs && parlay!.legs.map((leg, idx) => {
-          const kickoff = leg.kickoffTime
-            ? (() => { const d = new Date(leg.kickoffTime!); return isNaN(d.getTime()) ? null : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); })()
-            : null;
-          return (
-            <div
-              key={idx}
-              className="flex items-center justify-between gap-3 bg-background/60 border border-border/60 rounded-lg px-4 py-3"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <span className="shrink-0 w-5 h-5 rounded-full bg-primary/15 text-primary text-[11px] font-bold flex items-center justify-center">
-                  {idx + 1}
-                </span>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-semibold text-foreground truncate">
-                      {leg.homeTeam} vs {leg.awayTeam}
-                    </span>
-                    {kickoff && (
-                      <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded shrink-0">
-                        {kickoff}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                    <span className="text-xs text-muted-foreground">{leg.league}</span>
-                    <span className="text-muted-foreground/40">·</span>
-                    <span className="text-xs font-medium text-foreground">{leg.market}</span>
-                    <span className="text-muted-foreground/40">→</span>
-                    <span className="text-xs font-bold text-primary">{leg.selection}</span>
-                  </div>
+      {/* Parlay predictions modal */}
+      <Dialog.Root open={modalOpen} onOpenChange={setModalOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 animate-in fade-in" />
+          <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-2rem)] max-w-lg bg-card border border-border rounded-xl shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90dvh]">
+            {/* Modal header */}
+            <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 rounded-md bg-primary/15">
+                  <TrendingUp className="w-4 h-4 text-primary" />
+                </div>
+                <div>
+                  <Dialog.Title className="text-sm font-bold text-foreground">Parlay del Día</Dialog.Title>
+                  <p className="text-xs text-muted-foreground">
+                    {parlay?.legs.length} picks · cuota combinada{" "}
+                    <span className="text-primary font-bold">@{parlay?.combinedOdds.toFixed(2)}</span>
+                  </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-sm font-bold text-primary bg-primary/10 px-2 py-1 rounded tabular-nums">
-                  @{leg.odds.toFixed(2)}
-                </span>
-                <button
-                  onClick={() => onBetLeg(leg)}
-                  className="px-3 py-1 bg-primary text-primary-foreground text-xs font-semibold rounded hover:bg-primary/90 transition-colors"
-                >
-                  Apostar
-                </button>
-              </div>
+              <Dialog.Close className="p-1.5 rounded-md hover:bg-secondary transition-colors text-muted-foreground">
+                <X className="w-4 h-4" />
+              </Dialog.Close>
             </div>
-          );
-        })}
 
-        {/* Disclaimer */}
-        {!loading && hasLegs && (
-          <p className="text-[11px] text-muted-foreground/60 pt-1 text-center">
-            Picks independientes generados por IA · Un partido por selección · Cuota estimada sin comisión de casa
-          </p>
-        )}
-      </div>
-    </div>
+            {/* Legs list */}
+            <div className="overflow-y-auto flex-1 p-4 space-y-2">
+              {parlay!.legs.map((leg, idx) => {
+                const kickoff = leg.kickoffTime
+                  ? (() => { const d = new Date(leg.kickoffTime!); return isNaN(d.getTime()) ? null : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); })()
+                  : null;
+                return (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between gap-3 bg-secondary/40 border border-border/60 rounded-lg px-4 py-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="shrink-0 w-5 h-5 rounded-full bg-primary/15 text-primary text-[11px] font-bold flex items-center justify-center">
+                        {idx + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-semibold text-foreground truncate">
+                            {leg.homeTeam} vs {leg.awayTeam}
+                          </span>
+                          {kickoff && (
+                            <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded shrink-0">
+                              {kickoff}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                          <span className="text-xs text-muted-foreground">{leg.league}</span>
+                          <span className="text-muted-foreground/40">·</span>
+                          <span className="text-xs font-medium text-foreground">{leg.market}</span>
+                          <span className="text-muted-foreground/40">→</span>
+                          <span className="text-xs font-bold text-primary">{leg.selection}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-sm font-bold text-primary bg-primary/10 px-2 py-1 rounded tabular-nums shrink-0">
+                      @{leg.odds.toFixed(2)}
+                    </span>
+                  </div>
+                );
+              })}
+              <p className="text-[11px] text-muted-foreground/60 pt-1 text-center">
+                Picks independientes generados por IA · Un partido por selección · Cuota estimada sin comisión de casa
+              </p>
+            </div>
+
+            {/* Footer: single bet button */}
+            <div className="px-4 pb-4 pt-3 border-t border-border shrink-0">
+              <button
+                onClick={() => { setModalOpen(false); onBetParlay(parlay!); }}
+                className="w-full py-2.5 bg-primary text-primary-foreground text-sm font-bold rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+              >
+                <TrendingUp className="w-4 h-4" />
+                Apostar al Parlay · @{parlay?.combinedOdds.toFixed(2)}
+              </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+    </>
   );
 }
 
@@ -380,7 +410,7 @@ export default function Dashboard() {
   const [, setLocation] = useLocation();
   const [conversionModalOpen, setConversionModalOpen] = useState(false);
   const [sport, setSport] = useState<"futbol" | "baloncesto">("futbol");
-  const [parlayBetTarget, setParlayBetTarget] = useState<ParlayLeg | null>(null);
+  const [parlayBetTarget, setParlayBetTarget] = useState<ParlayData | null>(null);
 
   const { data: me } = useGetMe({ query: { queryKey: getGetMeQueryKey() } });
 
@@ -809,7 +839,7 @@ export default function Dashboard() {
               return (
                 <ParlayDelDia
                   hasAnalyzedMatches={hasAnalyzed}
-                  onBetLeg={setParlayBetTarget}
+                  onBetParlay={setParlayBetTarget}
                 />
               );
             })()}
@@ -847,45 +877,20 @@ export default function Dashboard() {
         onNavigate={() => { setConversionModalOpen(false); setLocation("/configuracion"); }}
       />
 
-      {/* Parlay leg bet modal */}
-      {parlayBetTarget && (() => {
-        const leg = parlayBetTarget;
-        const fakeMatch: Match = {
-          id: `parlay-${leg.homeTeam}-${leg.awayTeam}`,
-          apiFootballId: null,
-          homeTeam: leg.homeTeam,
-          awayTeam: leg.awayTeam,
-          league: leg.league,
-          kickoffTime: leg.kickoffTime ?? new Date().toISOString(),
-          stadium: null,
-          status: "scheduled",
-          score: null,
-          hasAnalysis: true,
-        };
-        const fakePrediction: Prediction = {
-          id: "parlay-leg",
-          market: leg.market,
-          selection: leg.selection,
-          odds: leg.odds,
-          confidence: "high",
-          reasoning: leg.reasoning ?? undefined,
-        };
-        return (
-          <Dialog.Root open={true} onOpenChange={(open) => { if (!open) setParlayBetTarget(null); }}>
-            <Dialog.Portal>
-              <Dialog.Overlay className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 animate-in fade-in" />
-              <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-2rem)] max-w-md bg-card border border-border rounded-xl shadow-2xl z-50 p-4 sm:p-6 animate-in fade-in zoom-in-95 duration-200 max-h-[90dvh] overflow-y-auto">
-                <BetModalContent
-                  prediction={fakePrediction}
-                  match={fakeMatch}
-                  leagueName={leg.league}
-                  onClose={() => setParlayBetTarget(null)}
-                />
-              </Dialog.Content>
-            </Dialog.Portal>
-          </Dialog.Root>
-        );
-      })()}
+      {/* Parlay bet modal */}
+      {parlayBetTarget && (
+        <Dialog.Root open={true} onOpenChange={(open) => { if (!open) setParlayBetTarget(null); }}>
+          <Dialog.Portal>
+            <Dialog.Overlay className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 animate-in fade-in" />
+            <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-2rem)] max-w-md bg-card border border-border rounded-xl shadow-2xl z-50 p-4 sm:p-6 animate-in fade-in zoom-in-95 duration-200 max-h-[90dvh] overflow-y-auto">
+              <ParlayBetModalContent
+                parlay={parlayBetTarget}
+                onClose={() => setParlayBetTarget(null)}
+              />
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+      )}
     </div>
   );
 }
@@ -1428,6 +1433,135 @@ function BetModalContent({ prediction, match, leagueName, onClose }: { predictio
         <button type="submit" disabled={createBet.isPending} className="px-6 py-2 bg-primary text-primary-foreground text-sm font-bold rounded hover:bg-primary/90 transition-colors flex items-center gap-2">
           {createBet.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
           Confirmar
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/* ─── Parlay bet modal ───────────────────────────────────────────────────── */
+
+function ParlayBetModalContent({ parlay, onClose }: { parlay: ParlayData; onClose: () => void }) {
+  const [stake, setStake] = useState<string>("10");
+  const [notes, setNotes] = useState<string>("");
+
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: me } = useGetMe({ query: { queryKey: getGetMeQueryKey() } });
+  const currency = me?.currency ?? "COP";
+  const createBet = useCreateBet();
+
+  // Latest kickoff among all legs (for the bet's kickoffTime)
+  const latestKickoff = parlay.legs
+    .map(l => l.kickoffTime)
+    .filter(Boolean)
+    .sort()
+    .at(-1) ?? new Date().toISOString();
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const stakeNum = parseFloat(stake);
+    if (isNaN(stakeNum) || stakeNum <= 0) return;
+
+    createBet.mutate({
+      data: {
+        homeTeam: "Parlay del Día",
+        awayTeam: `${parlay.legs.length} picks`,
+        league: "Parlay",
+        kickoffTime: latestKickoff,
+        market: "Parlay del Día",
+        selection: parlay.legs.map(l => l.selection).join(" · "),
+        odds: parlay.combinedOdds,
+        stake: stakeNum,
+        confidence: "high",
+        notes: JSON.stringify({ isParlay: true, legs: parlay.legs, ...(notes ? { userNotes: notes } : {}) }),
+      }
+    }, {
+      onSuccess: () => {
+        toast({ title: "Parlay registrado", description: "Se resolverá automáticamente al terminar todos los partidos." });
+        queryClient.invalidateQueries({ queryKey: getListBetsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetBetStatsQueryKey() });
+        onClose();
+      },
+      onError: () => {
+        toast({ title: "Error", description: "No se pudo registrar el parlay.", variant: "destructive" });
+      }
+    });
+  };
+
+  const potentialReturn = parseFloat(stake) > 0 ? parseFloat(stake) * parlay.combinedOdds : 0;
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-5">
+      <Dialog.Title className="text-xl font-bold">Apostar al Parlay</Dialog.Title>
+
+      {/* Combined odds highlight */}
+      <div className="flex items-center justify-between bg-primary/10 border border-primary/30 rounded-lg px-4 py-3">
+        <div>
+          <p className="text-xs text-muted-foreground">Cuota combinada</p>
+          <p className="text-2xl font-black text-primary tabular-nums">@{parlay.combinedOdds.toFixed(2)}</p>
+        </div>
+        <div className="text-right">
+          <p className="text-xs text-muted-foreground">{parlay.legs.length} picks · alta confianza</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Parlay del Día</p>
+        </div>
+      </div>
+
+      {/* Compact legs summary */}
+      <div className="space-y-1.5">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Selecciones incluidas</p>
+        <div className="space-y-1">
+          {parlay.legs.map((leg, idx) => (
+            <div key={idx} className="flex items-center gap-2 text-xs bg-secondary/40 rounded px-3 py-1.5">
+              <span className="shrink-0 w-4 h-4 rounded-full bg-primary/15 text-primary text-[10px] font-bold flex items-center justify-center">{idx + 1}</span>
+              <span className="text-muted-foreground truncate">{leg.homeTeam} vs {leg.awayTeam}</span>
+              <span className="text-muted-foreground/50 shrink-0">·</span>
+              <span className="font-bold text-primary shrink-0">{leg.selection}</span>
+              <span className="ml-auto font-bold text-primary/70 shrink-0 tabular-nums">@{leg.odds.toFixed(2)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Stake */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1">
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Monto ({currency})</label>
+          <input
+            type="number" step="1" min="1" value={stake} onChange={e => setStake(e.target.value)}
+            className="w-full bg-background border border-border px-3 py-2 rounded text-sm font-bold focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+            required
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Retorno potencial</label>
+          <div className="bg-background border border-border px-3 py-2 rounded text-sm font-bold text-primary tabular-nums">
+            {isNaN(potentialReturn) || potentialReturn <= 0 ? "—" : potentialReturn.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+          </div>
+        </div>
+      </div>
+
+      {/* Notes */}
+      <div className="space-y-1">
+        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Notas (Opcional)</label>
+        <input
+          type="text" value={notes} onChange={e => setNotes(e.target.value)}
+          placeholder="Ej: Stake reducido, partidos en la tarde..."
+          className="w-full bg-background border border-border px-3 py-2 rounded text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+        />
+      </div>
+
+      <p className="text-[11px] text-muted-foreground/60 text-center">
+        El parlay se marcará como acertado o perdido automáticamente al finalizar el último partido.
+      </p>
+
+      <div className="flex justify-end gap-3 pt-1">
+        <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium hover:bg-secondary rounded transition-colors">
+          Cancelar
+        </button>
+        <button type="submit" disabled={createBet.isPending} className="px-6 py-2 bg-primary text-primary-foreground text-sm font-bold rounded hover:bg-primary/90 transition-colors flex items-center gap-2">
+          {createBet.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <TrendingUp className="w-4 h-4" />}
+          Confirmar Parlay
         </button>
       </div>
     </form>
