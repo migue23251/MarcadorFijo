@@ -665,6 +665,101 @@ export async function verificarResultadosDelDia(): Promise<VerificationSummary> 
     summary.fixturesFound += fixtures.byName.size;
 
     for (const bet of bets) {
+
+      // ── Parlay: se evalúa ANTES del fixture lookup porque no tiene un único
+      // partido home/away — sus patas se buscan individualmente por fecha. ────
+      if (bet.market === "Parlay del Día" && bet.notes) {
+        let parsedParlay: { isParlay?: boolean; legs?: Array<{ homeTeam: string; awayTeam: string; market: string; selection: string; kickoffTime?: string | null }> } = {};
+        try { parsedParlay = JSON.parse(bet.notes); } catch { /* ignore */ }
+
+        if (parsedParlay.isParlay && Array.isArray(parsedParlay.legs)) {
+          const legs = parsedParlay.legs;
+          const legOutcomes: BetOutcome[] = [];
+          let anyLegUnresolved = false;
+
+          for (const leg of legs) {
+            // Cada pata puede tener su propio kickoffTime en una fecha distinta
+            // al bet principal — buscar en el mapa de fixtures correcto.
+            const legDate = leg.kickoffTime
+              ? kickoffDateUTC(leg.kickoffTime)
+              : date;
+
+            let legFixtures: FinishedFixtures;
+            try {
+              legFixtures = await getFixtures(legDate);
+            } catch (err) {
+              logger.error({ err, legDate, betId: bet.id }, "Error al obtener fixtures para pata del parlay — pospuesto");
+              anyLegUnresolved = true;
+              break;
+            }
+
+            const legFixture = findFixture(legFixtures.byName, leg.homeTeam, leg.awayTeam);
+
+            if (!legFixture) {
+              logger.info(
+                { betId: bet.id, legDate, homeTeam: leg.homeTeam, awayTeam: leg.awayTeam },
+                "Pata del parlay no encontrada en resultados — parlay pospuesto",
+              );
+              anyLegUnresolved = true;
+              break;
+            }
+
+            // Partido de la pata cancelado → pata void (no rompe el parlay)
+            if (
+              legFixture.statusShort === "CANC" ||
+              legFixture.statusShort === "ABD" ||
+              legFixture.statusShort === "PST"
+            ) {
+              legOutcomes.push("void");
+              continue;
+            }
+
+            let legStats: FixtureStats | undefined;
+            if (requiresStats(leg.market)) {
+              const loaded = await loadFixtureStats(legFixture, keys);
+              if (loaded) legStats = loaded;
+            }
+
+            const legOutcome = evaluateBet(leg.market, leg.selection, legFixture.homeScore, legFixture.awayScore, legStats);
+            legOutcomes.push(legOutcome);
+
+            if (legOutcome === "lost") break; // Short-circuit: parlay ya está perdido
+          }
+
+          if (anyLegUnresolved) {
+            logger.info({ betId: bet.id }, "Parlay tiene partidos aún no finalizados — pospuesto");
+            summary.notMatched++;
+            continue;
+          }
+
+          const parlayOutcome: BetOutcome =
+            legOutcomes.some(o => o === "lost") ? "lost" :
+            legOutcomes.every(o => o === "won") ? "won" : "void";
+
+          const returnAmount = parlayOutcome === "won"
+            ? parseFloat((bet.stake * bet.odds).toFixed(2))
+            : 0;
+
+          await db
+            .update(betsTable)
+            .set({
+              status: parlayOutcome,
+              finalScore: `${legOutcomes.filter(o => o === "won").length}/${legs.length} picks`,
+              returnAmount: parlayOutcome === "won" ? returnAmount : null,
+            })
+            .where(eq(betsTable.id, bet.id));
+
+          if (parlayOutcome === "won") summary.won++;
+          else if (parlayOutcome === "lost") summary.lost++;
+          else summary.voided++;
+          summary.resolved++;
+
+          logger.info({ betId: bet.id, legOutcomes, parlayOutcome }, "Parlay resuelto");
+          continue;
+        }
+      }
+      // ── End parlay handling ────────────────────────────────────────────────
+
       // Buscar el partido correspondiente (por ID exacto primero, luego por nombre)
       let fixture: FixtureResult | undefined;
 
@@ -716,92 +811,6 @@ export async function verificarResultadosDelDia(): Promise<VerificationSummary> 
           if (!statsCache.has(fixture.fixtureId ?? -1)) summary.statsFetched++;
         }
       }
-
-      // ── Parlay bet: evaluate all legs then decide ──────────────────────────
-      if (bet.market === "Parlay del Día" && bet.notes) {
-        let parsedParlay: { isParlay?: boolean; legs?: Array<{ homeTeam: string; awayTeam: string; market: string; selection: string; kickoffTime?: string | null }> } = {};
-        try { parsedParlay = JSON.parse(bet.notes); } catch { /* ignore */ }
-
-        if (parsedParlay.isParlay && Array.isArray(parsedParlay.legs)) {
-          const legs = parsedParlay.legs;
-          const legOutcomes: BetOutcome[] = [];
-          let anyLegUnresolved = false;
-
-          for (const leg of legs) {
-            // Cada pata puede tener su propio kickoffTime en una fecha distinta
-            // al bet principal — buscar en el mapa de fixtures correcto.
-            const legDate = leg.kickoffTime
-              ? kickoffDateUTC(leg.kickoffTime)
-              : date;
-
-            let legFixtures: FinishedFixtures;
-            try {
-              legFixtures = await getFixtures(legDate);
-            } catch (err) {
-              logger.error({ err, legDate, betId: bet.id }, "Error al obtener fixtures para pata del parlay — pospuesto");
-              anyLegUnresolved = true;
-              break;
-            }
-
-            let legFixture: FixtureResult | undefined;
-            legFixture = findFixture(legFixtures.byName, leg.homeTeam, leg.awayTeam);
-
-            if (!legFixture) {
-              // Partido de la pata aún no finalizado o no encontrado
-              logger.info(
-                { betId: bet.id, legDate, homeTeam: leg.homeTeam, awayTeam: leg.awayTeam },
-                "Pata del parlay no encontrada en resultados — parlay pospuesto",
-              );
-              anyLegUnresolved = true;
-              break;
-            }
-
-            let legStats: FixtureStats | undefined;
-            if (requiresStats(leg.market)) {
-              const loaded = await loadFixtureStats(legFixture, keys);
-              if (loaded) legStats = loaded;
-            }
-
-            const legOutcome = evaluateBet(leg.market, leg.selection, legFixture.homeScore, legFixture.awayScore, legStats);
-            legOutcomes.push(legOutcome);
-
-            if (legOutcome === "lost") break; // Short-circuit: parlay is already lost
-          }
-
-          if (anyLegUnresolved) {
-            logger.info({ betId: bet.id }, "Parlay tiene partidos aún no finalizados — pospuesto");
-            summary.notMatched++;
-            continue;
-          }
-
-          // Determine parlay outcome
-          const parlayOutcome: BetOutcome =
-            legOutcomes.some(o => o === "lost") ? "lost" :
-            legOutcomes.every(o => o === "won") ? "won" : "void";
-
-          const returnAmount = parlayOutcome === "won"
-            ? parseFloat((bet.stake * bet.odds).toFixed(2))
-            : 0;
-
-          await db
-            .update(betsTable)
-            .set({
-              status: parlayOutcome,
-              finalScore: `${legOutcomes.filter(o => o === "won").length}/${legs.length} picks`,
-              returnAmount: parlayOutcome === "won" ? returnAmount : null,
-            })
-            .where(eq(betsTable.id, bet.id));
-
-          if (parlayOutcome === "won") summary.won++;
-          else if (parlayOutcome === "lost") summary.lost++;
-          else summary.voided++;
-          summary.resolved++;
-
-          logger.info({ betId: bet.id, legOutcomes, parlayOutcome }, "Parlay resuelto");
-          continue;
-        }
-      }
-      // ── End parlay handling ────────────────────────────────────────────────
 
       const outcome = evaluateBet(
         bet.market,
