@@ -8,9 +8,12 @@ import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
 export default defineConfig(async ({ mode }) => {
   // loadEnv merges .env / .env.<mode> files into a plain object.
   // The third argument '' means: load ALL variables (not just VITE_* prefixed ones).
-  // This makes CLERK_PUBLISHABLE_KEY available here even when it is not exported
-  // to the shell before running `vite build` (common on VPS / CI deployments).
-  const env = loadEnv(mode, process.cwd(), '');
+  // When pnpm runs this build, cwd() is artifacts/football-bets/ — but the .env
+  // file lives in the monorepo root (two levels up). We try both locations so the
+  // key is found regardless of where the build is invoked from.
+  const envFromCwd  = loadEnv(mode, process.cwd(), '');
+  const envFromRoot = loadEnv(mode, path.resolve(import.meta.dirname, '..', '..'), '');
+  const env = { ...envFromRoot, ...envFromCwd }; // cwd wins if both have the key
 
   // Shell env takes precedence over .env file (keeps Replit Secrets working).
   const clerkPubKey = process.env.CLERK_PUBLISHABLE_KEY ?? env['CLERK_PUBLISHABLE_KEY'] ?? '';
