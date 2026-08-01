@@ -133,41 +133,56 @@ async function fetchFinishedFixtures(date: string): Promise<FinishedFixtures> {
     throw new Error("No API-Football keys configuradas (API_FOOTBALL_KEY_1 / FOOTBALL_API_KEY)");
   }
 
-  const url = new URL("https://v3.football.api-sports.io/fixtures");
-  url.searchParams.set("date", date);
-  url.searchParams.set("status", "FT-AET-PEN-AWD-WO");
-
-  logger.info({ date }, "Fetching finished fixtures from API-Football");
-
-  const data = await fetchConRotacion(url, keys, {
-    type: "header",
-    name: "x-rapidapi-key",
-    extraHeaders: { "x-rapidapi-host": "v3.football.api-sports.io" },
-  });
-
-  const fixtures: any[] = Array.isArray(data?.response) ? data.response : [];
-  logger.info({ date, count: fixtures.length }, "Finished fixtures received");
-
   const byName: FixtureMap = new Map();
   const byId: FixtureIdMap = new Map();
 
-  for (const f of fixtures) {
-    const homeName = normalize(f.teams?.home?.name ?? "");
-    const awayName = normalize(f.teams?.away?.name ?? "");
-    if (!homeName || !awayName) continue;
+  // API-Football pagina los resultados (máx ~100 por página).
+  // En fechas con muchos partidos (ej. clasificatorias UEFA) puede haber varias páginas.
+  // Iteramos todas las páginas hasta no haber más resultados.
+  let page = 1;
+  let totalPages = 1;
 
-    const fixtureId: number | undefined = f.fixture?.id;
+  do {
+    const url = new URL("https://v3.football.api-sports.io/fixtures");
+    url.searchParams.set("date", date);
+    url.searchParams.set("status", "FT-AET-PEN-AWD-WO");
+    url.searchParams.set("page", String(page));
 
-    const result: FixtureResult = {
-      fixtureId,
-      homeScore: f.goals?.home ?? 0,
-      awayScore: f.goals?.away ?? 0,
-      statusShort: f.fixture?.status?.short ?? "FT",
-    };
+    logger.info({ date, page, totalPages }, "Fetching finished fixtures from API-Football");
 
-    byName.set(`${homeName}|${awayName}`, result);
-    if (fixtureId) byId.set(fixtureId, result);
-  }
+    const data = await fetchConRotacion(url, keys, {
+      type: "header",
+      name: "x-rapidapi-key",
+      extraHeaders: { "x-rapidapi-host": "v3.football.api-sports.io" },
+    });
+
+    const fixtures: any[] = Array.isArray(data?.response) ? data.response : [];
+    totalPages = data?.paging?.total ?? 1;
+
+    logger.info({ date, page, totalPages, count: fixtures.length }, "Finished fixtures page received");
+
+    for (const f of fixtures) {
+      const homeName = normalize(f.teams?.home?.name ?? "");
+      const awayName = normalize(f.teams?.away?.name ?? "");
+      if (!homeName || !awayName) continue;
+
+      const fixtureId: number | undefined = f.fixture?.id;
+
+      const result: FixtureResult = {
+        fixtureId,
+        homeScore: f.goals?.home ?? 0,
+        awayScore: f.goals?.away ?? 0,
+        statusShort: f.fixture?.status?.short ?? "FT",
+      };
+
+      byName.set(`${homeName}|${awayName}`, result);
+      if (fixtureId) byId.set(fixtureId, result);
+    }
+
+    page++;
+  } while (page <= totalPages);
+
+  logger.info({ date, totalPages, totalFixtures: byName.size }, "Finished fixtures fetch complete");
 
   return { byName, byId };
 }
