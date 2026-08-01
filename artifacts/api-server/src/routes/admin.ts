@@ -95,7 +95,7 @@ router.post(
   requireAuth,
   requireAdmin,
   async (req, res): Promise<void> => {
-    const betId = parseInt(req.params.betId, 10);
+    const betId = parseInt(String(req.params.betId), 10);
     if (isNaN(betId)) {
       res.status(400).json({ error: "betId inválido" });
       return;
