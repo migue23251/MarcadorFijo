@@ -6,7 +6,7 @@
 
 import { Router, type IRouter } from "express";
 import { requireAuth, requireAdmin } from "../lib/auth";
-import { verificarResultadosDelDia } from "../services/resultChecker";
+import { verificarResultadosDelDia, diagnosticarParlay } from "../services/resultChecker";
 import { logger } from "../lib/logger";
 import { db, systemSettingsTable } from "@workspace/db";
 import { GetAdminSettingsResponse, UpdateAdminSettingsBody } from "@workspace/api-zod";
@@ -80,6 +80,33 @@ router.post(
         ok: false,
         error: err?.message ?? "Error interno durante la verificación",
       });
+    }
+  },
+);
+
+/**
+ * POST /admin/diagnostico-parlay/:betId
+ *
+ * Devuelve diagnóstico detallado de por qué un parlay no se ha resuelto.
+ * No modifica ningún dato — solo lectura.
+ */
+router.post(
+  "/admin/diagnostico-parlay/:betId",
+  requireAuth,
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const betId = parseInt(req.params.betId, 10);
+    if (isNaN(betId)) {
+      res.status(400).json({ error: "betId inválido" });
+      return;
+    }
+    logger.info({ betId }, "Diagnóstico de parlay iniciado por administrador");
+    try {
+      const result = await diagnosticarParlay(betId);
+      res.json(result);
+    } catch (err: any) {
+      logger.error({ err, betId }, "Error en diagnóstico de parlay");
+      res.status(500).json({ error: err?.message ?? "Error interno" });
     }
   },
 );

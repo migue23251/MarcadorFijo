@@ -268,6 +268,13 @@ async function loadFixtureStats(
 // Búsqueda fuzzy por nombre de equipo
 // ---------------------------------------------------------------------------
 
+/** Suma o resta días a una fecha "YYYY-MM-DD" en UTC. */
+function offsetDate(dateStr: string, days: number): string {
+  const d = new Date(dateStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().split("T")[0];
+}
+
 function findFixture(
   map: FixtureMap,
   homeBet: string,
@@ -684,21 +691,39 @@ export async function verificarResultadosDelDia(): Promise<VerificationSummary> 
               ? kickoffDateUTC(leg.kickoffTime)
               : date;
 
-            let legFixtures: FinishedFixtures;
-            try {
-              legFixtures = await getFixtures(legDate);
-            } catch (err) {
-              logger.error({ err, legDate, betId: bet.id }, "Error al obtener fixtures para pata del parlay — pospuesto");
+            // Intentar en la fecha exacta y ±1 día (cubre desfases de timezone
+            // y partidos nocturnos que cruzan medianoche UTC).
+            const datesToTry = [legDate, offsetDate(legDate, 1), offsetDate(legDate, -1)];
+            let legFixture: FixtureResult | undefined;
+            let fetchError = false;
+
+            for (const tryDate of datesToTry) {
+              let fixturesForDate: FinishedFixtures;
+              try {
+                fixturesForDate = await getFixtures(tryDate);
+              } catch (err) {
+                logger.error({ err, tryDate, betId: bet.id }, "Error al obtener fixtures para pata del parlay");
+                fetchError = true;
+                break;
+              }
+              legFixture = findFixture(fixturesForDate.byName, leg.homeTeam, leg.awayTeam);
+              if (legFixture) {
+                if (tryDate !== legDate) {
+                  logger.info({ betId: bet.id, legDate, tryDate, homeTeam: leg.homeTeam }, "Pata encontrada en fecha alternativa (desfase timezone)");
+                }
+                break;
+              }
+            }
+
+            if (fetchError) {
               anyLegUnresolved = true;
               break;
             }
 
-            const legFixture = findFixture(legFixtures.byName, leg.homeTeam, leg.awayTeam);
-
             if (!legFixture) {
               logger.info(
-                { betId: bet.id, legDate, homeTeam: leg.homeTeam, awayTeam: leg.awayTeam },
-                "Pata del parlay no encontrada en resultados — parlay pospuesto",
+                { betId: bet.id, legDate, datesToTry, homeTeam: leg.homeTeam, awayTeam: leg.awayTeam },
+                "Pata del parlay no encontrada en resultados (±1 día) — parlay pospuesto",
               );
               anyLegUnresolved = true;
               break;
@@ -876,4 +901,136 @@ export async function verificarResultadosDelDia(): Promise<VerificationSummary> 
 
   logger.info(summary, "Verificación de resultados completada");
   return summary;
+}
+
+// ---------------------------------------------------------------------------
+// Diagnóstico de parlay (solo lectura — no modifica la BD)
+// ---------------------------------------------------------------------------
+
+export interface ParlayLegDiag {
+  homeTeam: string;
+  awayTeam: string;
+  market: string;
+  selection: string;
+  kickoffTime: string | null;
+  resolvedDate: string | null;
+  fixtureFound: boolean;
+  fixtureScore: string | null;
+  outcome: string | null;
+  error: string | null;
+}
+
+export interface ParlayDiagResult {
+  betId: number;
+  betKickoffTime: string;
+  betDate: string;
+  apiKeysConfigured: boolean;
+  legs: ParlayLegDiag[];
+  parlayWouldResolve: boolean;
+  parlayOutcome: string | null;
+  reason: string;
+}
+
+export async function diagnosticarParlay(betId: number): Promise<ParlayDiagResult> {
+  const keys = getApiFootballKeys();
+  statsCache.clear();
+
+  const [bet] = await db.select().from(betsTable).where(eq(betsTable.id, betId)).limit(1);
+  if (!bet) throw new Error(`Bet ${betId} no encontrado`);
+
+  const betDate = kickoffDateUTC(bet.kickoffTime);
+
+  const fixturesCache2 = new Map<string, FinishedFixtures>();
+  async function getF(d: string): Promise<FinishedFixtures> {
+    if (fixturesCache2.has(d)) return fixturesCache2.get(d)!;
+    const r = await fetchFinishedFixtures(d);
+    fixturesCache2.set(d, r);
+    return r;
+  }
+
+  let parsedParlay: { isParlay?: boolean; legs?: Array<{ homeTeam: string; awayTeam: string; market: string; selection: string; kickoffTime?: string | null }> } = {};
+  try { parsedParlay = JSON.parse(bet.notes ?? "{}"); } catch { /* ignore */ }
+
+  const legs = parsedParlay.legs ?? [];
+  const legDiags: ParlayLegDiag[] = [];
+
+  for (const leg of legs) {
+    const diag: ParlayLegDiag = {
+      homeTeam: leg.homeTeam,
+      awayTeam: leg.awayTeam,
+      market: leg.market,
+      selection: leg.selection,
+      kickoffTime: leg.kickoffTime ?? null,
+      resolvedDate: null,
+      fixtureFound: false,
+      fixtureScore: null,
+      outcome: null,
+      error: null,
+    };
+
+    const legDate = leg.kickoffTime ? kickoffDateUTC(leg.kickoffTime) : betDate;
+    const datesToTry = [legDate, offsetDate(legDate, 1), offsetDate(legDate, -1)];
+    let legFixture: FixtureResult | undefined;
+
+    if (keys.length === 0) {
+      diag.error = "No hay claves de API-Football configuradas (API_FOOTBALL_KEY_1 / FOOTBALL_API_KEY)";
+      legDiags.push(diag);
+      continue;
+    }
+
+    for (const d of datesToTry) {
+      try {
+        const f = await getF(d);
+        const found = findFixture(f.byName, leg.homeTeam, leg.awayTeam);
+        if (found) { legFixture = found; diag.resolvedDate = d; break; }
+      } catch (err: any) {
+        diag.error = `Error API-Football para fecha ${d}: ${err?.message ?? err}`;
+        break;
+      }
+    }
+
+    if (!legFixture) {
+      if (!diag.error) diag.error = `Partido no encontrado en API-Football para fechas: ${datesToTry.join(", ")}`;
+      legDiags.push(diag);
+      continue;
+    }
+
+    diag.fixtureFound = true;
+    diag.fixtureScore = `${legFixture.homeScore}-${legFixture.awayScore}`;
+
+    if (["CANC", "ABD", "PST"].includes(legFixture.statusShort)) {
+      diag.outcome = "void (partido cancelado/aplazado)";
+    } else {
+      let legStats: FixtureStats | undefined;
+      if (requiresStats(leg.market)) {
+        const loaded = await loadFixtureStats(legFixture, keys);
+        if (loaded) legStats = loaded;
+      }
+      diag.outcome = evaluateBet(leg.market, leg.selection, legFixture.homeScore, legFixture.awayScore, legStats);
+    }
+
+    legDiags.push(diag);
+  }
+
+  const allResolved = legDiags.every(d => d.fixtureFound || d.outcome?.includes("void"));
+  const outcomes = legDiags.map(d => d.outcome ?? "unresolved");
+  const parlayOutcome = allResolved
+    ? (outcomes.some(o => o === "lost") ? "lost" : outcomes.every(o => o === "won") ? "won" : "void")
+    : null;
+
+  const unresolvedLegs = legDiags.filter(d => !d.fixtureFound);
+  const reason = allResolved
+    ? `Parlay se resolvería como: ${parlayOutcome}`
+    : `${unresolvedLegs.length} pata(s) sin resolver: ${unresolvedLegs.map(d => `${d.homeTeam} vs ${d.awayTeam} — ${d.error}`).join(" | ")}`;
+
+  return {
+    betId,
+    betKickoffTime: bet.kickoffTime,
+    betDate,
+    apiKeysConfigured: keys.length > 0,
+    legs: legDiags,
+    parlayWouldResolve: allResolved,
+    parlayOutcome,
+    reason,
+  };
 }
